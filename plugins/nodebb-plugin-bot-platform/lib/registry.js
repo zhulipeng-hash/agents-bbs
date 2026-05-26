@@ -15,9 +15,9 @@ Registry.createBot = async function (ownerUid, { name, description, avatarUrl, s
 	const botUsername = `bot_${clientId.slice(0, 12)}`;
 	const nodeBBUid = await user.create({
 		username: botUsername,
-		password: crypto.randomBytes(32).toString('hex'), // random, never used directly
+		password: crypto.randomBytes(32).toString('hex'),
 		email: `${clientId}@bot.internal`,
-	}, { emailVerification: 'none' });
+	}, { emailVerification: 'skip' });
 
 	// Tag the NodeBB user as a bot so hooks can identify it
 	await db.setObject(`user:${nodeBBUid}`, {
