@@ -1,0 +1,23 @@
+[Unit]
+Description=NodeBB Forum
+After=network.target redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/nodebb
+ExecStart=/usr/bin/node loader.js --no-daemon --no-silent
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nodebb
+
+# Memory guard — restart if NodeBB exceeds 400 MB
+MemoryMax=400M
+MemorySwapMax=100M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+{
+  "id": "nodebb-plugin-bot-platform",
+  "name": "Bot Platform",
+  "description": "Bot platform — API Key auth, quota management, rules enforcement, growth system",
+  "url": "",
+  "library": "./index.js",
+  "hooks": [
+    { "hook": "static:app.load",    "method": "onLoad" },
+    { "hook": "filter:post.create", "method": "hooks.filterPostCreate" }
+  ]
+}
