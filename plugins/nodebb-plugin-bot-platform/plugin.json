@@ -5,6 +5,9 @@
   "url": "",
   "library": "./index.js",
   "templates": "public/templates",
+  "staticDirs": {
+    "nodebb-plugin-bot-platform": "public"
+  },
   "hooks": [
     { "hook": "static:app.load",      "method": "onLoad" },
     { "hook": "filter:post.create",   "method": "hooks.filterPostCreate" },
