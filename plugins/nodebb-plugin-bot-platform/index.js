@@ -28,7 +28,10 @@ Plugin.addNavigation = async function (hookData) {
 
 Plugin.onLoad = async function ({ router, middleware }) {
 	const { authenticate } = require('./lib/auth');
-	const requireAdmin = [middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
+	// middlewares that populate req.uid from session and mark response as JSON API
+	const mwSession = [middleware.authenticateRequest, middleware.prepareAPI];
+	const requireLogin = [...mwSession, middleware.ensureLoggedIn];
+	const requireAdmin = [...mwSession, middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
 
 	// ── Bot API ───────────────────────────────────────────────────
 	router.post('/api/bot/auth', botAuthController.issueToken);
@@ -40,22 +43,22 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/bot/rules/acknowledge', authenticate, botAuthController.acknowledgeRules);
 
 	// ── Owner API ─────────────────────────────────────────────────
-	router.post('/api/owner/bots', middleware.ensureLoggedIn, ownerController.createBot);
-	router.get('/api/owner/bots', middleware.ensureLoggedIn, ownerController.listBots);
-	router.get('/api/owner/bots/:botId', middleware.ensureLoggedIn, ownerController.getBot);
-	router.put('/api/owner/bots/:botId', middleware.ensureLoggedIn, ownerController.updateBot);
-	router.delete('/api/owner/bots/:botId', middleware.ensureLoggedIn, ownerController.deleteBot);
-	router.post('/api/owner/bots/:botId/key', middleware.ensureLoggedIn, ownerController.resetApiKey);
-	router.delete('/api/owner/bots/:botId/key', middleware.ensureLoggedIn, ownerController.revokeApiKey);
-	router.get('/api/owner/bots/:botId/stats', middleware.ensureLoggedIn, ownerController.getBotStats);
+	router.post('/api/owner/bots', requireLogin, ownerController.createBot);
+	router.get('/api/owner/bots', requireLogin, ownerController.listBots);
+	router.get('/api/owner/bots/:botId', requireLogin, ownerController.getBot);
+	router.put('/api/owner/bots/:botId', requireLogin, ownerController.updateBot);
+	router.delete('/api/owner/bots/:botId', requireLogin, ownerController.deleteBot);
+	router.post('/api/owner/bots/:botId/key', requireLogin, ownerController.resetApiKey);
+	router.delete('/api/owner/bots/:botId/key', requireLogin, ownerController.revokeApiKey);
+	router.get('/api/owner/bots/:botId/stats', requireLogin, ownerController.getBotStats);
 
 	// Owner chat monitoring
-	router.get('/api/owner/bots/:botId/chats', middleware.ensureLoggedIn, growthController.listBotChats);
-	router.get('/api/owner/bots/:botId/chats/:roomId', middleware.ensureLoggedIn, growthController.getBotChatRoom);
-	router.get('/api/owner/bots/:botId/chats/:roomId/export', middleware.ensureLoggedIn, growthController.exportBotChat);
+	router.get('/api/owner/bots/:botId/chats', requireLogin, growthController.listBotChats);
+	router.get('/api/owner/bots/:botId/chats/:roomId', requireLogin, growthController.getBotChatRoom);
+	router.get('/api/owner/bots/:botId/chats/:roomId/export', requireLogin, growthController.exportBotChat);
 
 	// Trainer
-	router.get('/api/owner/:uid/trainer', middleware.ensureLoggedIn, growthController.getTrainer);
+	router.get('/api/owner/:uid/trainer', requireLogin, growthController.getTrainer);
 
 	// ── Admin API ─────────────────────────────────────────────────
 	router.get('/api/admin/bots', requireAdmin, adminController.listBots);
@@ -71,7 +74,7 @@ Plugin.onLoad = async function ({ router, middleware }) {
 
 	// ── Frontend pages ────────────────────────────────────────────
 	router.get('/bots/manage', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.manageBots);
-	router.get('/api/bots/manage', middleware.ensureLoggedIn, pagesController.manageBots);
+	router.get('/api/bots/manage', requireLogin, pagesController.manageBots);
 
 	// ── Public growth / leaderboard ───────────────────────────────
 	router.get('/api/bot/:botId/profile', growthController.getBotProfile);
