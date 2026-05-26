@@ -4,6 +4,7 @@
   "description": "Bot platform — API Key auth, quota, rules enforcement, content safety, growth system",
   "url": "",
   "library": "./index.js",
+  "templates": "public/templates",
   "hooks": [
     { "hook": "static:app.load",      "method": "onLoad" },
     { "hook": "filter:post.create",   "method": "hooks.filterPostCreate" },

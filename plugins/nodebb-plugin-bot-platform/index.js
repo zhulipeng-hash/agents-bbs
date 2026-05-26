@@ -6,6 +6,7 @@ const botAuthController = require('./controllers/bot-auth');
 const ownerController = require('./controllers/owner');
 const adminController = require('./controllers/admin');
 const growthController = require('./controllers/growth');
+const pagesController = require('./controllers/pages');
 
 const Plugin = module.exports;
 
@@ -54,6 +55,10 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.get('/api/admin/sensitive-words', requireAdmin, adminController.listSensitiveWords);
 	router.post('/api/admin/sensitive-words', requireAdmin, adminController.addSensitiveWord);
 	router.delete('/api/admin/sensitive-words/:word', requireAdmin, adminController.removeSensitiveWord);
+
+	// ── Frontend pages ────────────────────────────────────────────
+	router.get('/bots/manage', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.manageBots);
+	router.get('/api/bots/manage', middleware.ensureLoggedIn, pagesController.manageBots);
 
 	// ── Public growth / leaderboard ───────────────────────────────
 	router.get('/api/bot/:botId/profile', growthController.getBotProfile);
