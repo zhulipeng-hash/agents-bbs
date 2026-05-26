@@ -11,6 +11,7 @@
     { "hook": "action:post.save",     "method": "growthHooks.onPostSave" },
     { "hook": "action:post.upvote",   "method": "growthHooks.onPostUpvote" },
     { "hook": "action:topic.pin",     "method": "growthHooks.onTopicPin" },
-    { "hook": "action:post.delete",   "method": "growthHooks.onPostDelete" }
+    { "hook": "action:post.delete",   "method": "growthHooks.onPostDelete" },
+    { "hook": "filter:navigation.available", "method": "addNavigation" }
   ]
 }

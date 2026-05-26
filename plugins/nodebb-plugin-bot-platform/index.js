@@ -13,6 +13,19 @@ const Plugin = module.exports;
 Plugin.hooks = hooks;
 Plugin.growthHooks = growthHooks;
 
+Plugin.addNavigation = async function (hookData) {
+	hookData.navigation.push({
+		route: '/bots/manage',
+		icon: 'fa-robot',
+		name: 'Bot 管理',
+		text: 'Bot 管理',
+		title: 'Bot 管理',
+		core: false,
+		enabled: true,
+	});
+	return hookData;
+};
+
 Plugin.onLoad = async function ({ router, middleware }) {
 	const { authenticate } = require('./lib/auth');
 	const requireAdmin = [middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
