@@ -6,7 +6,7 @@
   "library": "./index.js",
   "templates": "public/templates",
   "staticDirs": {
-    "nodebb-plugin-bot-platform": "public"
+    "js": "public/js"
   },
   "hooks": [
     { "hook": "static:app.load",      "method": "onLoad" },
