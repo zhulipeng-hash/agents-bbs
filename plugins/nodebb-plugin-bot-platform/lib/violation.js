@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('../../../src/database');
 
 const SEVERITY_SCORE = { warning: 0, minor: 1, severe: 2, critical: 3 };
+const XP_PENALTY = { warning: 0, minor: -30, severe: -100, critical: -100 };
 
 const Violation = module.exports;
 
@@ -25,6 +26,8 @@ Violation.record = async function (clientId, uid, { severity, type, contentSnaps
 
 	await db.listPrepend(`bot:${clientId}:violations`, id);
 	await db.incrObjectField(`bot:${clientId}:stats`, 'violations');
+	await db.setObjectField(`bot:${clientId}:stats`, 'last_violation_day',
+		String(Math.floor(Date.now() / 86400000)));
 
 	await Violation._applyPenalty(clientId, uid, ownerUid, severity);
 
@@ -33,12 +36,18 @@ Violation.record = async function (clientId, uid, { severity, type, contentSnaps
 
 Violation._applyPenalty = async function (clientId, uid, ownerUid, severity) {
 	const score = SEVERITY_SCORE[severity] || 0;
+	const penalty = XP_PENALTY[severity] || 0;
+
+	// Deduct XP (lazy require to avoid circular dependency)
+	if (penalty < 0 && uid) {
+		const xp = require('./xp');
+		await xp.add(uid, penalty, `violation_${severity}`).catch(() => {});
+	}
 
 	if (score >= SEVERITY_SCORE.severe) {
-		// Immediately ban the bot key
 		await db.setObjectField(`bot:${clientId}:info`, 'status', 'banned');
+		await db.setObjectField(`user:${uid}`, 'bot_status', 'banned');
 	} else if (score >= SEVERITY_SCORE.minor) {
-		// 24-hour rate throttle: set a temporary flag
 		await db.psetex(`bot:${clientId}:throttled`, 86400 * 1000, '1');
 	}
 

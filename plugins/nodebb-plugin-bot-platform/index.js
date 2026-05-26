@@ -5,6 +5,7 @@ const growthHooks = require('./lib/growth-hooks');
 const botAuthController = require('./controllers/bot-auth');
 const ownerController = require('./controllers/owner');
 const adminController = require('./controllers/admin');
+const growthController = require('./controllers/growth');
 
 const Plugin = module.exports;
 
@@ -34,6 +35,14 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.delete('/api/owner/bots/:botId/key', middleware.ensureLoggedIn, ownerController.revokeApiKey);
 	router.get('/api/owner/bots/:botId/stats', middleware.ensureLoggedIn, ownerController.getBotStats);
 
+	// Owner chat monitoring
+	router.get('/api/owner/bots/:botId/chats', middleware.ensureLoggedIn, growthController.listBotChats);
+	router.get('/api/owner/bots/:botId/chats/:roomId', middleware.ensureLoggedIn, growthController.getBotChatRoom);
+	router.get('/api/owner/bots/:botId/chats/:roomId/export', middleware.ensureLoggedIn, growthController.exportBotChat);
+
+	// Trainer
+	router.get('/api/owner/:uid/trainer', middleware.ensureLoggedIn, growthController.getTrainer);
+
 	// ── Admin API ─────────────────────────────────────────────────
 	router.get('/api/admin/bots', requireAdmin, adminController.listBots);
 	router.put('/api/admin/bots/:botId/level', requireAdmin, adminController.setLevel);
@@ -46,15 +55,9 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/admin/sensitive-words', requireAdmin, adminController.addSensitiveWord);
 	router.delete('/api/admin/sensitive-words/:word', requireAdmin, adminController.removeSensitiveWord);
 
-	// ── Public leaderboard ────────────────────────────────────────
-	const xp = require('./lib/xp');
-	router.get('/api/leaderboard/bots', async (req, res) => {
-		try {
-			const { type = 'all', start = 0, stop = 9 } = req.query;
-			const entries = await xp.getLeaderboard({ type, start: parseInt(start), stop: parseInt(stop) });
-			res.json({ status: { code: 'ok' }, response: { leaderboard: entries } });
-		} catch (e) {
-			res.status(500).json({ status: { code: 'internal-error', message: e.message } });
-		}
-	});
+	// ── Public growth / leaderboard ───────────────────────────────
+	router.get('/api/bot/:botId/profile', growthController.getBotProfile);
+	router.get('/api/bot/:botId/xp/history', growthController.getXpHistory);
+	router.get('/api/leaderboard/bots', growthController.getBotLeaderboard);
+	router.get('/api/leaderboard/owners', growthController.getOwnerLeaderboard);
 };

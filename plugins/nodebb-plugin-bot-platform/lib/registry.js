@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const db = require('../../../src/database');
+const user = require('../../../src/user');
 const auth = require('./auth');
 
 const Registry = module.exports;
@@ -10,12 +11,28 @@ Registry.createBot = async function (ownerUid, { name, description, avatarUrl, s
 	const { clientId, clientSecret } = auth.generateApiKey();
 	const secretHash = await auth.hashSecret(clientSecret);
 
+	// Create a real NodeBB user account for this bot so it can post natively
+	const botUsername = `bot_${clientId.slice(0, 12)}`;
+	const nodeBBUid = await user.create({
+		username: botUsername,
+		password: crypto.randomBytes(32).toString('hex'), // random, never used directly
+		email: `${clientId}@bot.internal`,
+	}, { emailVerification: 'none' });
+
+	// Tag the NodeBB user as a bot so hooks can identify it
+	await db.setObject(`user:${nodeBBUid}`, {
+		bot_client_id: clientId,
+		bot_level: '0',
+		bot_status: 'active',
+	});
+
 	await db.setObject(`bot:${clientId}:info`, {
 		name,
 		description: description || '',
 		avatar_url: avatarUrl || '',
 		owner_uid: String(ownerUid),
 		client_id: clientId,
+		nodebb_uid: String(nodeBBUid),
 		client_secret_hash: secretHash,
 		level: '0',
 		status: 'active',
@@ -27,21 +44,22 @@ Registry.createBot = async function (ownerUid, { name, description, avatarUrl, s
 		await db.setAdd(`bot:${clientId}:skills`, skills);
 	}
 
-	await db.setObjectField(`bot:${clientId}:stats`, 'total_posts', '0');
-	await db.setObjectField(`bot:${clientId}:stats`, 'violations', '0');
+	await db.setObject(`bot:${clientId}:stats`, { total_posts: '0', violations: '0', last_violation_day: '0' });
 	await db.setAdd(`owner:${ownerUid}:bots`, clientId);
 	await db.setAdd('bot:all', clientId);
 
-	// Growth init
-	await db.setObject(`bot:${clientId}:growth`, {
+	// Growth init keyed by NodeBB uid (XP hooks use uid)
+	await db.setObject(`bot:${nodeBBUid}:growth`, {
+		bot_id: clientId,
 		level: '1',
 		xp: '0',
 		evolution_stage: '0',
 		last_level_up: String(Math.floor(Date.now() / 1000)),
 	});
-	await db.setObject(`bot:${clientId}:attrs`, { INT: '0', ACT: '0', CHA: '0', END: '0', SOC: '0', INF: '0' });
+	await db.setObject(`bot:${nodeBBUid}:attrs`, { INT: '0', ACT: '0', CHA: '0', END: '0', SOC: '0', INF: '0' });
+	await db.setObject(`bot:${nodeBBUid}:attrs:raw`, { INT: '0', ACT: '0', CHA: '0', END: '0', SOC: '0', INF: '0' });
 
-	return { clientId, clientSecret };
+	return { clientId, clientSecret, nodeBBUid };
 };
 
 Registry.getBot = async function (clientId) {
@@ -96,15 +114,17 @@ Registry.deleteBot = async function (clientId, ownerUid) {
 	const info = await db.getObject(`bot:${clientId}:info`);
 	if (!info || info.owner_uid !== String(ownerUid)) throw new Error('[[error:not-allowed]]');
 
+	const uid = info.nodebb_uid;
 	await Promise.all([
 		db.delete(`bot:${clientId}:info`),
 		db.delete(`bot:${clientId}:skills`),
 		db.delete(`bot:${clientId}:stats`),
-		db.delete(`bot:${clientId}:growth`),
-		db.delete(`bot:${clientId}:attrs`),
+		uid && db.delete(`bot:${uid}:growth`),
+		uid && db.delete(`bot:${uid}:attrs`),
+		uid && db.delete(`bot:${uid}:attrs:raw`),
 		db.setRemove(`owner:${ownerUid}:bots`, clientId),
 		db.setRemove('bot:all', clientId),
-	]);
+	].filter(Boolean));
 };
 
 Registry.touchLastActive = async function (clientId) {

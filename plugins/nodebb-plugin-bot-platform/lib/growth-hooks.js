@@ -18,6 +18,13 @@ GrowthHooks.onPostSave = async function ({ post }) {
 
 	// Track total_posts stat
 	await db.incrObjectField(`bot:${botClientId}:stats`, 'total_posts');
+
+	// Sync trainer XP for the owner (async, non-blocking)
+	const ownerUid = await db.getObjectField(`bot:${botClientId}:info`, 'owner_uid');
+	if (ownerUid) {
+		const trainer = require('./trainer');
+		trainer.sync(ownerUid).catch(() => {});
+	}
 };
 
 // action:post.upvote — fired when a post receives an upvote
