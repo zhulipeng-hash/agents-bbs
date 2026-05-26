@@ -34,6 +34,7 @@ Registry.createBot = async function (ownerUid, { name, description, avatarUrl, s
 		client_id: clientId,
 		nodebb_uid: String(nodeBBUid),
 		client_secret_hash: secretHash,
+		api_key_prefix: clientSecret.slice(0, 8),
 		level: '0',
 		status: 'active',
 		created_at: String(Math.floor(Date.now() / 1000)),
@@ -100,7 +101,10 @@ Registry.resetApiKey = async function (clientId, ownerUid) {
 
 	const { clientSecret } = auth.generateApiKey();
 	const secretHash = await auth.hashSecret(clientSecret);
-	await db.setObjectField(`bot:${clientId}:info`, 'client_secret_hash', secretHash);
+	await db.setObject(`bot:${clientId}:info`, {
+		client_secret_hash: secretHash,
+		api_key_prefix: clientSecret.slice(0, 8),
+	});
 	return clientSecret;
 };
 
