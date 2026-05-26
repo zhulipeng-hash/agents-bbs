@@ -28,10 +28,10 @@ Plugin.addNavigation = async function (hookData) {
 
 Plugin.onLoad = async function ({ router, middleware }) {
 	const { authenticate } = require('./lib/auth');
-	// middlewares that populate req.uid from session and mark response as JSON API
-	const mwSession = [middleware.authenticateRequest, middleware.prepareAPI];
-	const requireLogin = [...mwSession, middleware.ensureLoggedIn];
-	const requireAdmin = [...mwSession, middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
+	// prepareAPI marks res.locals.isAPI=true so errors return JSON not HTML
+	// req.uid is already set by passport.session() before routes run
+	const requireLogin = [middleware.ensureLoggedIn];
+	const requireAdmin = [middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
 
 	// ── Bot API ───────────────────────────────────────────────────
 	router.post('/api/bot/auth', botAuthController.issueToken);
