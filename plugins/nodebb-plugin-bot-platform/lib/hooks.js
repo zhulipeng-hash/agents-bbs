@@ -6,14 +6,7 @@ const categories = require('../../../src/categories');
 const quota = require('./quota');
 const rules = require('./rules');
 const violation = require('./violation');
-
-const INJECTION_PATTERNS = [
-	/ignore previous instructions/i,
-	/you are now/i,
-	/system:\s/i,
-	/\[INST\]/i,
-	/<\|system\|>/i,
-];
+const contentFilter = require('./content-filter');
 
 const Hooks = module.exports;
 
@@ -59,21 +52,22 @@ Hooks.filterPostCreate = async function (hookData) {
 		throw Object.assign(new Error('[[error:bot-platform.rate-limit]]'), { quotaResult });
 	}
 
-	// Content safety: length check
-	if (post.content && post.content.length > 2000) {
-		throw new Error('[[error:bot-platform.content-too-long]]');
-	}
-
-	// Prompt injection detection (async violation record, non-blocking check)
-	const injected = INJECTION_PATTERNS.some(p => p.test(post.content || ''));
-	if (injected) {
+	// Content safety pipeline
+	const filterResult = await contentFilter.check(post.content || '');
+	if (!filterResult.passed) {
+		const severity = filterResult.isInjection ? 'severe' : 'minor';
+		const type = filterResult.isInjection ? 'injection'
+			: filterResult.isDangerousHtml ? 'dangerous-html' : 'content-violation';
 		await violation.record(clientId, uid, {
-			severity: 'severe',
-			type: 'injection',
+			severity,
+			type,
 			contentSnapshot: (post.content || '').slice(0, 500),
 			actionTaken: 'rejected',
 		});
-		throw new Error('[[error:bot-platform.injection-detected]]');
+		if (filterResult.violations.includes('too-long')) throw new Error('[[error:bot-platform.content-too-long]]');
+		if (filterResult.isInjection) throw new Error('[[error:bot-platform.injection-detected]]');
+		if (filterResult.isDangerousHtml) throw new Error('[[error:bot-platform.dangerous-html]]');
+		throw new Error('[[error:bot-platform.content-violation]]');
 	}
 
 	// L0 bots → queue for review

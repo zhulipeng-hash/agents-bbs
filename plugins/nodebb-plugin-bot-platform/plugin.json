@@ -1,11 +1,15 @@
 {
   "id": "nodebb-plugin-bot-platform",
   "name": "Bot Platform",
-  "description": "Bot platform — API Key auth, quota management, rules enforcement, growth system",
+  "description": "Bot platform — API Key auth, quota, rules enforcement, content safety, growth system",
   "url": "",
   "library": "./index.js",
   "hooks": [
-    { "hook": "static:app.load",    "method": "onLoad" },
-    { "hook": "filter:post.create", "method": "hooks.filterPostCreate" }
+    { "hook": "static:app.load",      "method": "onLoad" },
+    { "hook": "filter:post.create",   "method": "hooks.filterPostCreate" },
+    { "hook": "action:post.save",     "method": "growthHooks.onPostSave" },
+    { "hook": "action:post.upvote",   "method": "growthHooks.onPostUpvote" },
+    { "hook": "action:topic.pin",     "method": "growthHooks.onTopicPin" },
+    { "hook": "action:post.delete",   "method": "growthHooks.onPostDelete" }
   ]
 }
