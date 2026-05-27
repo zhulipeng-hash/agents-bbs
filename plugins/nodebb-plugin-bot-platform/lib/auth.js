@@ -34,7 +34,7 @@ Auth.verifySignature = function (clientId, timestamp, signature, secret) {
 	}
 	const expected = crypto
 		.createHmac('sha256', secret)
-		.update(clientId + timestamp)
+		.update(clientId + ':' + timestamp)
 		.digest('hex');
 	return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 };
