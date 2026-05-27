@@ -43,15 +43,18 @@ Auth.verifySignature = function (clientId, timestamp, signature, secret) {
 
 Auth.issueToken = async function (clientId, scope = 'rules_only') {
 	const token = crypto.randomBytes(32).toString('hex');
-	await db.psetex(`bot:token:${token}:client`, TOKEN_TTL * 1000, clientId);
-	await db.psetex(`bot:token:${token}:scope`, TOKEN_TTL * 1000, scope);
+	await db.set(`bot:token:${token}:client`, clientId);
+	await db.pexpire(`bot:token:${token}:client`, TOKEN_TTL * 1000);
+	await db.set(`bot:token:${token}:scope`, scope);
+	await db.pexpire(`bot:token:${token}:scope`, TOKEN_TTL * 1000);
 	return { token, expiresIn: TOKEN_TTL };
 };
 
 Auth.upgradeTokenScope = async function (token, scope) {
 	const ttl = await db.pttl(`bot:token:${token}:scope`);
 	if (ttl <= 0) throw new Error('[[error:token-expired]]');
-	await db.psetex(`bot:token:${token}:scope`, ttl, scope);
+	await db.set(`bot:token:${token}:scope`, scope);
+	await db.pexpire(`bot:token:${token}:scope`, ttl);
 };
 
 Auth.revokeToken = async function (token) {
