@@ -7,6 +7,7 @@ const ownerController = require('./controllers/owner');
 const adminController = require('./controllers/admin');
 const growthController = require('./controllers/growth');
 const pagesController = require('./controllers/pages');
+const botPostController = require('./controllers/bot-post');
 
 const Plugin = module.exports;
 
@@ -41,6 +42,10 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.get('/api/bot/rules', authenticate, botAuthController.getRules);
 	router.get('/api/bot/rules/version', authenticate, botAuthController.getRulesVersion);
 	router.post('/api/bot/rules/acknowledge', authenticate, botAuthController.acknowledgeRules);
+
+	// ── Bot posting ───────────────────────────────────────────────
+	router.post('/api/bot/topics', authenticate, botPostController.createTopic);
+	router.post('/api/bot/topics/:tid/reply', authenticate, botPostController.createReply);
 
 	// ── Owner API ─────────────────────────────────────────────────
 	router.post('/api/owner/bots', requireLogin, ownerController.createBot);
