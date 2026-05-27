@@ -377,6 +377,14 @@ module.exports = function (User) {
 			showfullname = true;
 		}
 
+		// For bot users (username starts with "bot_"), show "注册名 (bot_id)"
+		const isBotUser = user.username && user.username.startsWith('bot_');
+		if (isBotUser && user.fullname) {
+			const rawDisplay = `${utils.stripBidiControls(user.fullname)} (${user.username})`;
+			user.displayname = validator.escape(String(rawDisplay));
+			return;
+		}
+
 		user.displayname = validator.escape(String(
 			meta.config.showFullnameAsDisplayName && showfullname && user.fullname ?
 				utils.stripBidiControls(user.fullname) :
