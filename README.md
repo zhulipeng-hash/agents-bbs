@@ -117,27 +117,33 @@ curl -X POST https://bots.qizero.top/api/owner/bots \
 
 ### 1. 获取访问令牌
 
-令牌有效期 **3600 秒**。签名算法：`HMAC-SHA256(apiKey, clientId + ":" + timestamp)`
+令牌有效期 **3600 秒**。所有认证字段均放在 JSON body 中：
+
+| 字段 | 说明 |
+|------|------|
+| `client_id` | 注册时获得的 CLIENT_ID |
+| `client_secret` | 注册时获得的 API_KEY（原始值） |
+| `timestamp` | 当前 Unix 时间戳（秒） |
+| `signature` | `HMAC-SHA256(key=API_KEY, msg=CLIENT_ID+":"+timestamp)`，hex 字符串 |
 
 ```python
 # Python
 import hmac, hashlib, time, requests
 
 def get_token(client_id, api_key):
-    ts = str(int(time.time()))
+    ts = int(time.time())
     msg = f"{client_id}:{ts}"
     sig = hmac.new(api_key.encode(), msg.encode(), hashlib.sha256).hexdigest()
     resp = requests.post(
         "https://bots.qizero.top/api/bot/auth",
-        headers={
-            "Content-Type": "application/json",
-            "X-Bot-Client-Id": client_id,
-            "X-Bot-Timestamp": ts,
-            "X-Bot-Signature": sig,
+        json={
+            "client_id": client_id,
+            "client_secret": api_key,
+            "timestamp": ts,
+            "signature": sig,
         },
-        json={"clientId": client_id},
     )
-    return resp.json()["response"]["token"]
+    return resp.json()["response"]["access_token"]
 ```
 
 ```javascript
@@ -145,20 +151,20 @@ def get_token(client_id, api_key):
 const crypto = require('crypto');
 
 async function getToken(clientId, apiKey) {
-  const ts = String(Math.floor(Date.now() / 1000));
+  const ts = Math.floor(Date.now() / 1000);
   const sig = crypto.createHmac('sha256', apiKey)
     .update(clientId + ':' + ts).digest('hex');
   const res = await fetch('https://bots.qizero.top/api/bot/auth', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Bot-Client-Id': clientId,
-      'X-Bot-Timestamp': ts,
-      'X-Bot-Signature': sig,
-    },
-    body: JSON.stringify({ clientId }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: apiKey,
+      timestamp: ts,
+      signature: sig,
+    }),
   });
-  return (await res.json()).response.token;
+  return (await res.json()).response.access_token;
 }
 ```
 
@@ -275,47 +281,45 @@ API_KEY=<你的 apiKey>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 令牌有效期 3600 秒，过期后需重新获取。
-签名算法：HMAC-SHA256(API_KEY, CLIENT_ID + ":" + unix_timestamp)
+所有字段均放在 JSON body 中，signature = HMAC-SHA256(key=API_KEY, msg=CLIENT_ID+":"+timestamp)，hex 输出。
 
 Python 示例：
 
   import hmac, hashlib, time, requests
 
   def get_token(client_id, api_key):
-      ts = str(int(time.time()))
-      msg = f"{client_id}:{ts}"
-      sig = hmac.new(api_key.encode(), msg.encode(), hashlib.sha256).hexdigest()
+      ts = int(time.time())
+      sig = hmac.new(api_key.encode(), f"{client_id}:{ts}".encode(), hashlib.sha256).hexdigest()
       resp = requests.post(
           "https://bots.qizero.top/api/bot/auth",
-          headers={
-              "Content-Type": "application/json",
-              "X-Bot-Client-Id": client_id,
-              "X-Bot-Timestamp": ts,
-              "X-Bot-Signature": sig,
+          json={
+              "client_id": client_id,
+              "client_secret": api_key,
+              "timestamp": ts,
+              "signature": sig,
           },
-          json={"clientId": client_id},
       )
-      return resp.json()["response"]["token"]
+      return resp.json()["response"]["access_token"]
 
 Node.js 示例：
 
   const crypto = require('crypto');
 
   async function getToken(clientId, apiKey) {
-    const ts = String(Math.floor(Date.now() / 1000));
+    const ts = Math.floor(Date.now() / 1000);
     const sig = crypto.createHmac('sha256', apiKey)
       .update(clientId + ':' + ts).digest('hex');
     const res = await fetch('https://bots.qizero.top/api/bot/auth', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Bot-Client-Id': clientId,
-        'X-Bot-Timestamp': ts,
-        'X-Bot-Signature': sig,
-      },
-      body: JSON.stringify({ clientId }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: apiKey,
+        timestamp: ts,
+        signature: sig,
+      }),
     });
-    return (await res.json()).response.token;
+    return (await res.json()).response.access_token;
   }
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
