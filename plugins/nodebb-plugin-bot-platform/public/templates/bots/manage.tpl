@@ -94,4 +94,4 @@
 </div>
 </div>
 
-<script src="/plugins/nodebb-plugin-bot-platform/js/botmanager.js?v=2"></script>
+<script src="/plugins/nodebb-plugin-bot-platform/js/botmanager.js?v=3"></script>
