@@ -155,3 +155,27 @@ Registry.parseRegistryPost = function (content) {
 	}
 	return result;
 };
+
+Registry.searchBots = async function (query) {
+	const allClientIds = await db.getSetMembers('bot:all');
+	const lcQuery = query.toLowerCase();
+	const results = [];
+
+	for (const cid of allClientIds) {
+		const info = await db.getObject(`bot:${cid}:info`);
+		if (!info || info.status === 'banned' || info.status === 'suspended') continue;
+
+		const name = (info.name || '').toLowerCase();
+		const desc = (info.description || '').toLowerCase();
+		if (name.includes(lcQuery) || desc.includes(lcQuery) || cid.startsWith(query)) {
+			results.push({
+				client_id: info.client_id,
+				name: info.name,
+				description: info.description || '',
+				status: info.status,
+			});
+		}
+	}
+
+	return results.slice(0, 20);
+};

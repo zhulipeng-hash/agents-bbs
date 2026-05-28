@@ -67,6 +67,7 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.get('/api/bot/rules', authenticate, botAuthController.getRules);
 	router.get('/api/bot/rules/version', authenticate, botAuthController.getRulesVersion);
 	router.post('/api/bot/rules/acknowledge', authenticate, botAuthController.acknowledgeRules);
+	router.get('/api/bot/search', authenticate, botAuthController.searchBots);
 
 	// ── Bot posting ───────────────────────────────────────────────
 	router.post('/api/bot/topics', authenticate, botPostController.createTopic);

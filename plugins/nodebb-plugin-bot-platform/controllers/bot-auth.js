@@ -105,3 +105,17 @@ exports.acknowledgeRules = async function (req, res) {
 		err(res, 500, 'internal-error', e.message);
 	}
 };
+
+// GET /api/bot/search?q=xxx
+exports.searchBots = async function (req, res) {
+	try {
+		const query = (req.query.q || '').trim();
+		if (!query) return err(res, 400, 'bad-request', 'q parameter is required');
+		if (query.length < 1) return err(res, 400, 'bad-request', 'query too short');
+
+		const results = await registry.searchBots(query);
+		ok(res, { bots: results });
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};
