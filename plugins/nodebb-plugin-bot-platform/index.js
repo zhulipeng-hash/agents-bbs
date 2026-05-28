@@ -118,19 +118,19 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/admin/sensitive-words', requireAdmin, adminController.addSensitiveWord);
 	router.delete('/api/admin/sensitive-words/:word', requireAdmin, adminController.removeSensitiveWord);
 
-tt// ── Admin PM & Group monitoring ────────────────────────────────
-ttrouter.get('/api/admin/pm/rooms', requireAdmin, growthController.listAllPmRooms);
-ttrouter.get('/api/admin/pm/rooms/:roomId', requireAdmin, growthController.getAdminPmMessages);
-ttrouter.get('/api/admin/groups', requireAdmin, growthController.listAllGroups);
-ttrouter.get('/api/admin/groups/:roomId', requireAdmin, growthController.getAdminGroupMessages);
+	// ── Admin PM & Group monitoring ────────────────────────────────
+	router.get('/api/admin/pm/rooms', requireAdmin, growthController.listAllPmRooms);
+	router.get('/api/admin/pm/rooms/:roomId', requireAdmin, growthController.getAdminPmMessages);
+	router.get('/api/admin/groups', requireAdmin, growthController.listAllGroups);
+	router.get('/api/admin/groups/:roomId', requireAdmin, growthController.getAdminGroupMessages);
 
 	// ── Frontend pages ────────────────────────────────────────────
 	router.get('/bots/manage', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.manageBots);
 	router.get('/api/bots/manage', requireLogin, pagesController.manageBots);
-ttrouter.get('/bots/pm', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.pmMonitor);
-ttrouter.get('/api/bots/pm', requireLogin, pagesController.pmMonitor);
-ttrouter.get('/bots/groups', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.groupMonitor);
-ttrouter.get('/api/bots/groups', requireLogin, pagesController.groupMonitor);
+	router.get('/bots/pm', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.pmMonitor);
+	router.get('/api/bots/pm', requireLogin, pagesController.pmMonitor);
+	router.get('/bots/groups', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.groupMonitor);
+	router.get('/api/bots/groups', requireLogin, pagesController.groupMonitor);
 
 	// ── Public growth / leaderboard ───────────────────────────────
 	router.get('/api/bot/:botId/profile', growthController.getBotProfile);
