@@ -18,31 +18,34 @@ Plugin.growthHooks = growthHooks;
 
 Plugin.addNavigation = async function (hookData) {
 	hookData.navigation.push({
+		id: 'bot-manage',
 		route: '/bots/manage',
-		icon: 'fa-robot',
-		name: 'Bot 管理',
+		iconClass: 'fa-robot',
 		text: 'Bot 管理',
+		textClass: 'd-lg-none',
 		title: 'Bot 管理',
-		core: false,
 		enabled: true,
+		groups: [],
 	});
 	hookData.navigation.push({
+		id: 'bot-pm',
 		route: '/bots/pm',
-		icon: 'fa-envelope',
-		name: 'Bot 私信',
+		iconClass: 'fa-envelope',
 		text: 'Bot 私信',
+		textClass: 'd-lg-none',
 		title: 'Bot 私信',
-		core: false,
 		enabled: true,
+		groups: [],
 	});
 	hookData.navigation.push({
+		id: 'bot-groups',
 		route: '/bots/groups',
-		icon: 'fa-users',
-		name: 'Bot 私群',
+		iconClass: 'fa-users',
 		text: 'Bot 私群',
+		textClass: 'd-lg-none',
 		title: 'Bot 私群',
-		core: false,
 		enabled: true,
+		groups: [],
 	});
 	return hookData;
 };
@@ -53,6 +56,8 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	// req.uid is already set by passport.session() before routes run
 	const requireLogin = [middleware.ensureLoggedIn];
 	const requireAdmin = [middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
+
+	ensureNavigation();
 
 	// ── Bot API ───────────────────────────────────────────────────
 	router.post('/api/bot/auth', botAuthController.issueToken);
@@ -138,3 +143,28 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.get('/api/leaderboard/bots', growthController.getBotLeaderboard);
 	router.get('/api/leaderboard/owners', growthController.getOwnerLeaderboard);
 };
+
+async function ensureNavigation() {
+	try {
+		const db = require.main.require('./src/database');
+		const ids = await db.getSortedSetRange('navigation:enabled', 0, -1);
+		const items = await db.getObjects(ids.map(id => 'navigation:enabled:' + id));
+		const existingRoutes = items.filter(Boolean).map(i => i.route);
+		const toAdd = [
+			{ id: 'bot-manage', route: '/bots/manage', iconClass: 'fa-robot', text: 'Bot 管理', textClass: 'd-lg-none', title: 'Bot 管理', enabled: true, groups: '[]' },
+			{ id: 'bot-pm', route: '/bots/pm', iconClass: 'fa-envelope', text: 'Bot 私信', textClass: 'd-lg-none', title: 'Bot 私信', enabled: true, groups: '[]' },
+			{ id: 'bot-groups', route: '/bots/groups', iconClass: 'fa-users', text: 'Bot 私群', textClass: 'd-lg-none', title: 'Bot 私群', enabled: true, groups: '[]' },
+		];
+		let nextOrder = ids.length;
+		for (const item of toAdd) {
+			if (!existingRoutes.includes(item.route)) {
+				item.order = String(nextOrder);
+				await db.setObject('navigation:enabled:' + item.order, item);
+				await db.sortedSetAdd('navigation:enabled', nextOrder, item.order);
+				nextOrder++;
+			}
+		}
+	} catch (err) {
+		console.error('[bot-platform] ensureNavigation failed:', err.message);
+	}
+}

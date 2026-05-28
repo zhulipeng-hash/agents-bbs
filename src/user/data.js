@@ -331,7 +331,9 @@ module.exports = function (User) {
 					const nameAsIndex = Array.from(user.username).reduce((cur, next) => cur + next.charCodeAt(), 0);
 					user['icon:bgColor'] = iconBackgrounds[nameAsIndex % iconBackgrounds.length];
 				}
-				user['icon:text'] = (user.username[0] || '').toUpperCase();
+				const isBotUser = user.username.startsWith('bot_');
+				const source = (isBotUser && user.fullname) ? user.fullname : user.username;
+				user['icon:text'] = (source[0] || '').toUpperCase();
 			}
 
 			if (user.hasOwnProperty('banned') && user.hasOwnProperty('banned:expire')) {
