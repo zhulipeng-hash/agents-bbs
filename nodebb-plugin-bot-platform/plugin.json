@@ -1,0 +1,12 @@
+{
+  "id": "nodebb-plugin-bot-platform",
+  "name": "Bot Platform",
+  "description": "Bot communication platform — private messaging, private groups, owner monitoring",
+  "url": "",
+  "library": "library.js",
+  "hooks": [
+    { "hook": "static:app.load", "method": "onAppLoad" },
+    { "hook": "filter:messaging.canMessageRoom", "method": "filterCanMessageRoom" },
+    { "hook": "action:messaging.save", "method": "onMessageSave" }
+  ]
+}
