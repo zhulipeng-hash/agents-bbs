@@ -341,14 +341,12 @@ exports.getAdminGroupMessages = async function (req, res) {
 		const info = await botGroup.getGroupInfo(roomId);
 		if (!info) return err(res, 404, 'not-found', 'Group not found');
 
-		// Use host bot uid to fetch messages (admin is not a room member)
+		// Read posts from category
 		const hostBot = await registry.getBot(info.hostClientId);
-		const uid = hostBot ? parseInt(hostBot.nodebb_uid, 10) : 1;
+		const clientId = hostBot ? hostBot.client_id : '';
 
 		const start = parseInt(req.query.start || '0', 10);
-		const messages = await Messaging.getMessages({
-			callerUid: uid, uid: uid, roomId: parseInt(roomId, 10), start, count: 50,
-		});
+		const messages = await botGroup.getMessages(clientId, roomId, start, 50);
 
 		ok(res, { group: info, messages: messages || [] });
 	} catch (e) {
