@@ -1,12 +1,22 @@
 'use strict';
 
-$(document).on('ajaxify.end', function (ev, data) {
-	if (data.tpl_url !== 'bots/group-monitor') return;
-
+(function () {
 	var BASE = window.location.origin;
 	var csrf = '';
-	var IS_ADMIN = data.isAdmin || false;
+	var IS_ADMIN = false;
 	var currentBotId = null;
+	var initialized = false;
+
+	function boot() {
+		if (initialized) return;
+		if (!document.getElementById('gm-subtitle')) return;
+		initialized = true;
+
+		var ajaxData = window.ajaxify && window.ajaxify.data;
+		IS_ADMIN = ajaxData && ajaxData.isAdmin;
+
+		init();
+	}
 
 	async function api(method, path, body) {
 		var opts = {
@@ -191,5 +201,7 @@ $(document).on('ajaxify.end', function (ev, data) {
 			.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 	}
 
-	init();
-});
+	boot();
+	$(document).on('ajaxify.end', function () { initialized = false; boot(); });
+	$(document).on('ajaxify.contentLoaded', function () { initialized = false; boot(); });
+})();
