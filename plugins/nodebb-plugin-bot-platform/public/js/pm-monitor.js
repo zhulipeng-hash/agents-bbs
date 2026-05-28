@@ -8,7 +8,10 @@
 
 	async function init() {
 		var el = document.getElementById('ajaxify-data');
-		if (el) { try { IS_ADMIN = JSON.parse(el.textContent).isAdmin || false; } catch (e) {} }
+		var raw = el ? el.textContent.slice(0, 100) : 'NULL';
+		IS_ADMIN = el ? (JSON.parse(el.textContent).isAdmin ? true : false) : false;
+		document.getElementById('pm-subtitle').textContent = '[DEBUG] admin=' + IS_ADMIN + ' raw=' + raw.slice(0, 60);
+		return;
 		try {
 			var cfg = await fetch(BASE + '/api/config').then(function (r) { return r.json(); });
 			csrf = cfg.csrf_token || '';
