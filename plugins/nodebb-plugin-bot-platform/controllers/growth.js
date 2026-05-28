@@ -223,3 +223,110 @@ exports.getBotGroupRoom = async function (req, res) {
 		err(res, 500, 'internal-error', e.message);
 	}
 };
+
+// ── Admin global PM monitoring ────────────────────────────────────
+
+exports.listAllPmRooms = async function (req, res) {
+	try {
+		const allClientIds = await db.getSetMembers('bot:all');
+		const seen = new Set();
+		const rooms = [];
+
+		for (const cid of allClientIds) {
+			const roomIds = await db.getSetMembers('bot:' + cid + ':pm:rooms');
+			for (const roomId of roomIds) {
+				if (seen.has(roomId)) continue;
+				seen.add(roomId);
+
+				const meta = await db.getObject('bot:pm:' + roomId);
+				if (!meta) continue;
+
+				const sender = await registry.getBot(meta.sender_client_id);
+				const receiver = await registry.getBot(meta.receiver_client_id);
+
+				rooms.push({
+					roomId: parseInt(roomId, 10),
+					sender: sender ? { clientId: sender.client_id, name: sender.name } : null,
+					receiver: receiver ? { clientId: receiver.client_id, name: receiver.name } : null,
+					createdAt: meta.created_at ? parseInt(meta.created_at, 10) : null,
+				});
+			}
+		}
+
+		rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+		ok(res, { rooms });
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};
+
+exports.getAdminPmMessages = async function (req, res) {
+	try {
+		const { roomId } = req.params;
+		const meta = await db.getObject('bot:pm:' + roomId);
+		if (!meta) return err(res, 404, 'not-found', 'PM room not found');
+
+		// Use one participant's uid to fetch messages
+		const bot = await registry.getBot(meta.sender_client_id);
+		const uid = bot ? parseInt(bot.nodebb_uid, 10) : 1;
+
+		const start = parseInt(req.query.start || '0', 10);
+		const messages = await Messaging.getMessages({
+			callerUid: uid, uid, roomId: parseInt(roomId, 10), start, count: 50,
+		});
+
+		ok(res, {
+			roomId: parseInt(roomId, 10),
+			senderClientId: meta.sender_client_id,
+			receiverClientId: meta.receiver_client_id,
+			messages: messages || [],
+		});
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};
+
+// ── Admin global group monitoring ─────────────────────────────────
+
+exports.listAllGroups = async function (req, res) {
+	try {
+		const botGroup = require('../lib/bot-group');
+		const allClientIds = await db.getSetMembers('bot:all');
+		const seen = new Set();
+		const groups = [];
+
+		for (const cid of allClientIds) {
+			const groupIds = await db.getSetMembers('bot:' + cid + ':groups');
+			for (const roomId of groupIds) {
+				if (seen.has(roomId)) continue;
+				seen.add(roomId);
+				const info = await botGroup.getGroupInfo(roomId);
+				if (info && info.status === 'active') groups.push(info);
+			}
+		}
+
+		groups.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+		ok(res, { groups });
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};
+
+exports.getAdminGroupMessages = async function (req, res) {
+	try {
+		const { roomId } = req.params;
+		const botGroup = require('../lib/bot-group');
+		const info = await botGroup.getGroupInfo(roomId);
+		if (!info) return err(res, 404, 'not-found', 'Group not found');
+
+		// Use admin uid (1) to fetch — member check is bypassed for admins
+		const start = parseInt(req.query.start || '0', 10);
+		const messages = await Messaging.getMessages({
+			callerUid: 1, uid: 1, roomId: parseInt(roomId, 10), start, count: 50,
+		});
+
+		ok(res, { group: info, messages: messages || [] });
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};

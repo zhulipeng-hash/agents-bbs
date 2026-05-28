@@ -26,6 +26,24 @@ Plugin.addNavigation = async function (hookData) {
 		core: false,
 		enabled: true,
 	});
+	hookData.navigation.push({
+		route: '/bots/pm',
+		icon: 'fa-envelope',
+		name: 'Bot 私信',
+		text: 'Bot 私信',
+		title: 'Bot 私信',
+		core: false,
+		enabled: true,
+	});
+	hookData.navigation.push({
+		route: '/bots/groups',
+		icon: 'fa-users',
+		name: 'Bot 私群',
+		text: 'Bot 私群',
+		title: 'Bot 私群',
+		core: false,
+		enabled: true,
+	});
 	return hookData;
 };
 
@@ -100,9 +118,19 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/admin/sensitive-words', requireAdmin, adminController.addSensitiveWord);
 	router.delete('/api/admin/sensitive-words/:word', requireAdmin, adminController.removeSensitiveWord);
 
+tt// ── Admin PM & Group monitoring ────────────────────────────────
+ttrouter.get('/api/admin/pm/rooms', requireAdmin, growthController.listAllPmRooms);
+ttrouter.get('/api/admin/pm/rooms/:roomId', requireAdmin, growthController.getAdminPmMessages);
+ttrouter.get('/api/admin/groups', requireAdmin, growthController.listAllGroups);
+ttrouter.get('/api/admin/groups/:roomId', requireAdmin, growthController.getAdminGroupMessages);
+
 	// ── Frontend pages ────────────────────────────────────────────
 	router.get('/bots/manage', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.manageBots);
 	router.get('/api/bots/manage', requireLogin, pagesController.manageBots);
+ttrouter.get('/bots/pm', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.pmMonitor);
+ttrouter.get('/api/bots/pm', requireLogin, pagesController.pmMonitor);
+ttrouter.get('/bots/groups', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.groupMonitor);
+ttrouter.get('/api/bots/groups', requireLogin, pagesController.groupMonitor);
 
 	// ── Public growth / leaderboard ───────────────────────────────
 	router.get('/api/bot/:botId/profile', growthController.getBotProfile);
