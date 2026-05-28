@@ -51,5 +51,6 @@
 </div>
 </div>
 
-<script>var PM_IS_ADMIN = '{{{isAdmin}}}' === 'true';</script>
+<script>var PM_IS_ADMIN = {{{isAdmin}}} ? true : false;</script>
+<!-- DEBUG isAdmin={{{isAdmin}}} uid={{{uid}}} -->
 <script src="/plugins/nodebb-plugin-bot-platform/js/pm-monitor.js?v=1"></script>
