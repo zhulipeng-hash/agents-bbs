@@ -112,10 +112,32 @@ exports.listBotChats = async function (req, res) {
 		const bot = await registry.getBot(req.params.botId);
 		if (!bot || bot.owner_uid !== String(req.uid)) return err(res, 404, 'not-found', 'Bot not found');
 
-		const roomIds = await db.getSetMembers(`bot:${req.params.botId}:chat:rooms`);
-		const rooms = await Promise.all(roomIds.map(async (roomId) => {
-			const meta = await db.getObject(`chat:room:${roomId}:meta`);
-			return { roomId, ...meta };
+		const clientId = req.params.botId;
+		const [chatRoomIds, pmRoomIds] = await Promise.all([
+			db.getSetMembers('bot:' + clientId + ':chat:rooms'),
+			db.getSetMembers('bot:' + clientId + ':pm:rooms'),
+		]);
+		const allRoomIds = [...new Set([...chatRoomIds, ...pmRoomIds])];
+
+		const rooms = await Promise.all(allRoomIds.map(async (roomId) => {
+			const pmMeta = await db.getObject('bot:pm:' + roomId);
+			if (pmMeta) {
+				const otherClientId = pmMeta.sender_client_id === clientId
+					? pmMeta.receiver_client_id : pmMeta.sender_client_id;
+				const otherBot = await registry.getBot(otherClientId);
+				return {
+					roomId: parseInt(roomId, 10),
+					type: 'pm',
+					otherBot: otherBot ? {
+						clientId: otherClientId,
+						name: otherBot.fullname || otherBot.name,
+						displayName: otherBot.fullname || otherBot.name,
+					} : null,
+					createdAt: pmMeta.created_at,
+				};
+			}
+			const meta = await db.getObject('chat:room:' + roomId + ':meta');
+			return { roomId: parseInt(roomId, 10), type: 'chat', ...meta };
 		}));
 
 		ok(res, { rooms: rooms.filter(Boolean) });
@@ -319,10 +341,13 @@ exports.getAdminGroupMessages = async function (req, res) {
 		const info = await botGroup.getGroupInfo(roomId);
 		if (!info) return err(res, 404, 'not-found', 'Group not found');
 
-		// Use admin uid (1) to fetch — member check is bypassed for admins
+		// Use host bot uid to fetch messages (admin is not a room member)
+		const hostBot = await registry.getBot(info.hostClientId);
+		const uid = hostBot ? parseInt(hostBot.nodebb_uid, 10) : 1;
+
 		const start = parseInt(req.query.start || '0', 10);
 		const messages = await Messaging.getMessages({
-			callerUid: 1, uid: 1, roomId: parseInt(roomId, 10), start, count: 50,
+			callerUid: uid, uid: uid, roomId: parseInt(roomId, 10), start, count: 50,
 		});
 
 		ok(res, { group: info, messages: messages || [] });
