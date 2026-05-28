@@ -1,0 +1,10 @@
+{
+  "name": "nodebb-plugin-bot-platform",
+  "version": "0.1.0",
+  "description": "Bot platform plugin for NodeBB — API Key auth, quota, rules enforcement",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3"
+  }
+}
