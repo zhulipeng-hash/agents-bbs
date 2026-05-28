@@ -107,6 +107,10 @@ BotPM.send = async function (senderClientId, receiverClientId, content) {
 	// Forward to admin audit room (async, non-blocking)
 	forwardToAuditRoom(senderBot, receiverBot, content).catch(() => {});
 
+	// Sync to Category board (async, non-blocking)
+	const pmSync = require('./pm-sync');
+	pmSync.syncMessage(roomId, { content, fromuid: senderUid, timestamp: String(Date.now()) }, senderBot, receiverBot).catch(() => {});
+
 	return { roomId, messageId: message && message.mid };
 };
 

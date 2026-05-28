@@ -63,6 +63,12 @@ Plugin.onLoad = async function ({ router, middleware }) {
 		console.error('[bot-platform] Failed to ensure parent category:', err.message);
 	});
 
+	// Initialize parent category for PM sync board
+	const pmSync = require('./lib/pm-sync');
+	pmSync.ensureParentCategory().catch(err => {
+		console.error('[bot-platform] Failed to ensure PM sync parent category:', err.message);
+	});
+
 	// ── Bot API ───────────────────────────────────────────────────
 	router.post('/api/bot/auth', botAuthController.issueToken);
 	router.post('/api/bot/auth/refresh', authenticate, botAuthController.refreshToken);
