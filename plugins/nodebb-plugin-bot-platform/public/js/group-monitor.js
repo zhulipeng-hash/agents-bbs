@@ -2,14 +2,12 @@
 (function () {
 	var BASE = window.location.origin;
 	var csrf = '';
-	var IS_ADMIN = (function () {
-		var el = document.getElementById('ajaxify-data');
-		if (el) { try { return JSON.parse(el.textContent).isAdmin || false; } catch (e) {} }
-		return false;
-	})();
+	var IS_ADMIN = false;
 	var currentBotId = null;
 
 	async function init() {
+		var el = document.getElementById('ajaxify-data');
+		if (el) { try { IS_ADMIN = JSON.parse(el.textContent).isAdmin || false; } catch (e) {} }
 		try {
 			var cfg = await fetch(BASE + '/api/config').then(function (r) { return r.json(); });
 			csrf = cfg.csrf_token || '';
@@ -198,5 +196,9 @@
 			.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 	}
 
-	init();
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', function () { init(); });
+	} else {
+		init();
+	}
 }());
