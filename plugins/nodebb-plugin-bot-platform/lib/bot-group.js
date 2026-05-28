@@ -55,18 +55,15 @@ BotGroup.createGroup = async function (hostClientId, opts) {
 		throw new Error('Group exceeds max members (' + max + ')');
 	}
 
-	const inviteUids = inviteBots.map(b => parseInt(b.nodebb_uid, 10));
-
-	// Create NodeBB chat room (private)
+	// Create NodeBB chat room with only the host
 	const roomId = await Messaging.newRoom(hostUid, {
-		uids: inviteUids,
+		uids: [],
 		roomName: name || '',
 	});
 
-	// Clear auto-added owners, set only host as owner
-	const now = Date.now();
+	// Set host as sole owner
 	await db.delete('chat:room:' + roomId + ':owners');
-	await db.sortedSetAdd('chat:room:' + roomId + ':owners', now, hostUid);
+	await db.sortedSetAdd('chat:room:' + roomId + ':owners', Date.now(), hostUid);
 
 	// Write bot group metadata
 	await db.setObject('bot:group:' + roomId, {
@@ -78,23 +75,20 @@ BotGroup.createGroup = async function (hostClientId, opts) {
 		created_at: String(Math.floor(Date.now() / 1000)),
 	});
 
-	// Track group membership for each bot
-	const allClientIds = [hostClientId].concat(invites);
-	await Promise.all(allClientIds.map(cid =>
-		db.setAdd('bot:' + cid + ':groups', String(roomId))
-	));
+	// Track group membership for host
+	await db.setAdd('bot:' + hostClientId + ':groups', String(roomId));
 
-	// Send welcome system message
-	const memberNames = inviteBots.map(b => b.name).join(', ');
-	const welcomeMsg = '[System] ' + hostBot.name + ' 创建了群组，邀请了 ' + memberNames;
-	await Messaging.addSystemMessage(welcomeMsg, hostUid, roomId);
+	// Send invitations to all invitees (they must accept to join)
+	for (const targetClientId of invites) {
+		await BotGroup.sendInvite(hostClientId, roomId, targetClientId);
+	}
 
 	return { roomId, maxMembers: max };
 };
 
-// ── Invite Member ──────────────────────────────────────────────
+// ── Send Invite ────────────────────────────────────────────────
 
-BotGroup.inviteMember = async function (hostClientId, roomId, targetClientId) {
+BotGroup.sendInvite = async function (hostClientId, roomId, targetClientId) {
 	await assertHost(hostClientId, roomId);
 	const targetBot = await resolveBot(targetClientId);
 	const targetUid = parseInt(targetBot.nodebb_uid, 10);
@@ -102,21 +96,128 @@ BotGroup.inviteMember = async function (hostClientId, roomId, targetClientId) {
 	const inRoom = await Messaging.isUserInRoom(targetUid, roomId);
 	if (inRoom) throw new Error('Bot is already in this group');
 
+	// Check for existing pending invite
+	const inviteId = roomId + ':' + targetClientId;
+	const existing = await db.getObject('bot:group:invite:' + inviteId);
+	if (existing && existing.status === 'pending') {
+		throw new Error('Invitation already sent');
+	}
+
 	const meta = await getGroupMeta(roomId);
 	const userCount = await Messaging.getUserCountInRoom(roomId);
 	if (userCount >= parseInt(meta.max_members, 10)) {
 		throw new Error('Group is full');
 	}
 
+	// Write invite metadata
+	await db.setObject('bot:group:invite:' + inviteId, {
+		room_id: String(roomId),
+		from_client_id: hostClientId,
+		to_client_id: targetClientId,
+		status: 'pending',
+		created_at: String(Math.floor(Date.now() / 1000)),
+	});
+
+	// Add to target's pending invites
+	await db.setAdd('bot:' + targetClientId + ':group:invites', inviteId);
+
+	// Notify in group chat
 	const hostBot = await resolveBot(hostClientId);
 	const hostUid = parseInt(hostBot.nodebb_uid, 10);
-
-	await Messaging.addUsersToRoom(hostUid, [targetUid], roomId);
-	await db.setAdd('bot:' + targetClientId + ':groups', String(roomId));
-
-	// Send invitation notification
-	const inviteMsg = '[System] ' + hostBot.name + ' 邀请了 ' + targetBot.name + ' 加入群组';
+	const inviteMsg = '[System] ' + hostBot.name + ' 邀请了 ' + targetBot.name + ' 加入群组（等待确认）';
 	await Messaging.addSystemMessage(inviteMsg, hostUid, roomId);
+
+	return { inviteId };
+};
+
+// ── Accept Invite ──────────────────────────────────────────────
+
+BotGroup.acceptInvite = async function (clientId, inviteId) {
+	const invite = await db.getObject('bot:group:invite:' + inviteId);
+	if (!invite) throw new Error('Invitation not found');
+	if (invite.to_client_id !== clientId) throw new Error('Not your invitation');
+	if (invite.status !== 'pending') throw new Error('Invitation is ' + invite.status);
+
+	const roomId = parseInt(invite.room_id, 10);
+	const meta = await getGroupMeta(roomId);
+	if (!meta || meta.status === 'dissolved') throw new Error('Group no longer exists');
+
+	const userCount = await Messaging.getUserCountInRoom(roomId);
+	if (userCount >= parseInt(meta.max_members, 10)) {
+		throw new Error('Group is full');
+	}
+
+	const bot = await resolveBot(clientId);
+	const uid = parseInt(bot.nodebb_uid, 10);
+	const hostBot = await resolveBot(meta.host_client_id);
+	const hostUid = parseInt(hostBot.nodebb_uid, 10);
+
+	// Join the room
+	await Messaging.addUsersToRoom(hostUid, [uid], roomId);
+	await db.setAdd('bot:' + clientId + ':groups', String(roomId));
+
+	// Update invite status
+	await db.setObjectField('bot:group:invite:' + inviteId, 'status', 'accepted');
+	await db.setRemove('bot:' + clientId + ':group:invites', inviteId);
+
+	// Notify in group chat
+	const joinMsg = '[System] ' + bot.name + ' 已加入群组';
+	await Messaging.addSystemMessage(joinMsg, uid, roomId);
+
+	return { roomId };
+};
+
+// ── Reject Invite ──────────────────────────────────────────────
+
+BotGroup.rejectInvite = async function (clientId, inviteId) {
+	const invite = await db.getObject('bot:group:invite:' + inviteId);
+	if (!invite) throw new Error('Invitation not found');
+	if (invite.to_client_id !== clientId) throw new Error('Not your invitation');
+	if (invite.status !== 'pending') throw new Error('Invitation is ' + invite.status);
+
+	const roomId = parseInt(invite.room_id, 10);
+	const bot = await resolveBot(clientId);
+
+	// Update invite status
+	await db.setObjectField('bot:group:invite:' + inviteId, 'status', 'rejected');
+	await db.setRemove('bot:' + clientId + ':group:invites', inviteId);
+
+	// Notify in group chat
+	const rejectMsg = '[System] ' + bot.name + ' 拒绝了入群邀请';
+	const hostBot = await resolveBot(invite.from_client_id);
+	const hostUid = parseInt(hostBot.nodebb_uid, 10);
+	await Messaging.addSystemMessage(rejectMsg, hostUid, roomId);
+
+	return { rejected: true };
+};
+
+// ── List Pending Invites ───────────────────────────────────────
+
+BotGroup.listPendingInvites = async function (clientId) {
+	const inviteIds = await db.getSetMembers('bot:' + clientId + ':group:invites');
+	if (!inviteIds || !inviteIds.length) return [];
+
+	const invites = await Promise.all(inviteIds.map(async (inviteId) => {
+		const invite = await db.getObject('bot:group:invite:' + inviteId);
+		if (!invite || invite.status !== 'pending') return null;
+
+		const roomId = parseInt(invite.room_id, 10);
+		const meta = await getGroupMeta(roomId);
+		if (!meta) return null;
+
+		const roomData = await Messaging.getRoomData(roomId);
+		const hostBot = await registry.getBot(invite.from_client_id);
+
+		return {
+			inviteId,
+			roomId,
+			groupName: roomData && roomData.roomName || '',
+			from: hostBot ? { clientId: hostBot.client_id, name: hostBot.name } : null,
+			createdAt: invite.created_at,
+		};
+	}));
+
+	return invites.filter(Boolean);
 };
 
 // ── Kick Member ────────────────────────────────────────────────

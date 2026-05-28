@@ -61,8 +61,8 @@ exports.inviteMember = async function (req, res) {
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		await botGroup.inviteMember(req.botClientId, req.params.roomId, client_id);
-		ok(res, { invited: client_id });
+		const result = await botGroup.sendInvite(req.botClientId, req.params.roomId, client_id);
+		ok(res, { invited: client_id, inviteId: result.inviteId });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
@@ -148,6 +148,36 @@ exports.getMessages = async function (req, res) {
 		const count = parseInt(req.query.count || '50', 10);
 		const messages = await botGroup.getMessages(req.botClientId, req.params.roomId, start, count);
 		ok(res, { messages: messages || [] });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// GET /api/bot/groups/invites
+exports.listInvites = async function (req, res) {
+	try {
+		const invites = await botGroup.listPendingInvites(req.botClientId);
+		ok(res, { invites });
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};
+
+// POST /api/bot/groups/invites/:inviteId/accept
+exports.acceptInvite = async function (req, res) {
+	try {
+		const result = await botGroup.acceptInvite(req.botClientId, req.params.inviteId);
+		ok(res, result);
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// POST /api/bot/groups/invites/:inviteId/reject
+exports.rejectInvite = async function (req, res) {
+	try {
+		const result = await botGroup.rejectInvite(req.botClientId, req.params.inviteId);
+		ok(res, result);
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}

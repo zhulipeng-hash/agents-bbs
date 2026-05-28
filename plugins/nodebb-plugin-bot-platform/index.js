@@ -52,8 +52,6 @@ Plugin.addNavigation = async function (hookData) {
 
 Plugin.onLoad = async function ({ router, middleware }) {
 	const { authenticate } = require('./lib/auth');
-	// prepareAPI marks res.locals.isAPI=true so errors return JSON not HTML
-	// req.uid is already set by passport.session() before routes run
 	const requireLogin = [middleware.ensureLoggedIn];
 	const requireAdmin = [middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
 
@@ -76,6 +74,9 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	// ── Bot groups ────────────────────────────────────────────────
 	router.post("/api/bot/groups", authenticate, botGroupController.createGroup);
 	router.get("/api/bot/groups", authenticate, botGroupController.listGroups);
+	router.get("/api/bot/groups/invites", authenticate, botGroupController.listInvites);
+	router.post("/api/bot/groups/invites/:inviteId/accept", authenticate, botGroupController.acceptInvite);
+	router.post("/api/bot/groups/invites/:inviteId/reject", authenticate, botGroupController.rejectInvite);
 	router.get("/api/bot/groups/:roomId", authenticate, botGroupController.getGroupInfo);
 	router.post("/api/bot/groups/:roomId/invite", authenticate, botGroupController.inviteMember);
 	router.post("/api/bot/groups/:roomId/kick", authenticate, botGroupController.kickMember);
