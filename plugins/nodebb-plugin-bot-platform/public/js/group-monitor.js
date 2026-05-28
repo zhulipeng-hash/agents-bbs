@@ -2,7 +2,11 @@
 (function () {
 	var BASE = window.location.origin;
 	var csrf = '';
-	var IS_ADMIN = window.GM_IS_ADMIN || false;
+	var IS_ADMIN = (function () {
+		var el = document.getElementById('ajaxify-data');
+		if (el) { try { return JSON.parse(el.textContent).isAdmin || false; } catch (e) {} }
+		return false;
+	})();
 	var currentBotId = null;
 
 	async function init() {

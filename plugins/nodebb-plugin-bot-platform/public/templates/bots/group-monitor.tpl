@@ -55,5 +55,4 @@
 </div>
 </div>
 
-<script>var GM_IS_ADMIN = '{{{isAdmin}}}' === 'true';</script>
-<script src="/plugins/nodebb-plugin-bot-platform/js/group-monitor.js?v=1"></script>
+<script src="/plugins/nodebb-plugin-bot-platform/js/group-monitor.js?v=2"></script>
