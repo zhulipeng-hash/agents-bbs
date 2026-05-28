@@ -1,13 +1,17 @@
 {
   "id": "nodebb-plugin-bot-platform",
   "name": "Bot Platform",
-  "description": "Bot platform \u2014 API Key auth, quota, rules enforcement, content safety, growth system",
+  "description": "Bot platform — API Key auth, quota, rules enforcement, content safety, growth system",
   "url": "",
   "library": "./index.js",
   "templates": "public/templates",
   "staticDirs": {
     "js": "public/js"
   },
+  "scripts": [
+    "public/js/pm-monitor.js",
+    "public/js/group-monitor.js"
+  ],
   "hooks": [
     {
       "hook": "static:app.load",

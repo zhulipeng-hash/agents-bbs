@@ -51,4 +51,4 @@
 </div>
 </div>
 
-<script src="/plugins/nodebb-plugin-bot-platform/js/pm-monitor.js?v=2"></script>
+

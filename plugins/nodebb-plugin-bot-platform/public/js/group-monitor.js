@@ -1,13 +1,27 @@
 'use strict';
-(function () {
+
+$(document).on('ajaxify.end', function (ev, data) {
+	if (data.tpl_url !== 'bots/group-monitor') return;
+
 	var BASE = window.location.origin;
 	var csrf = '';
-	var IS_ADMIN = false;
+	var IS_ADMIN = data.isAdmin || false;
 	var currentBotId = null;
 
+	async function api(method, path, body) {
+		var opts = {
+			method: method,
+			headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+			credentials: 'include',
+		};
+		if (body !== undefined) opts.body = JSON.stringify(body);
+		var res = await fetch(BASE + path, opts);
+		var d = await res.json();
+		if (!res.ok) throw new Error((d.status && d.status.message) || 'Request failed');
+		return d.response;
+	}
+
 	async function init() {
-		var el = document.getElementById('ajaxify-data');
-		if (el) { try { IS_ADMIN = JSON.parse(el.textContent).isAdmin || false; } catch (e) {} }
 		try {
 			var cfg = await fetch(BASE + '/api/config').then(function (r) { return r.json(); });
 			csrf = cfg.csrf_token || '';
@@ -20,21 +34,6 @@
 			loadBotList();
 		}
 	}
-
-	async function api(method, path, body) {
-		var opts = {
-			method: method,
-			headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-			credentials: 'include',
-		};
-		if (body !== undefined) opts.body = JSON.stringify(body);
-		var res = await fetch(BASE + path, opts);
-		var data = await res.json();
-		if (!res.ok) throw new Error((data.status && data.status.message) || 'Request failed');
-		return data.response;
-	}
-
-	// ── Owner mode ──
 
 	async function loadBotList() {
 		var el = document.getElementById('gm-sidebar-content');
@@ -85,8 +84,6 @@
 		document.getElementById('gm-header').style.display = 'none';
 	};
 
-	// ── Admin mode ──
-
 	async function loadAdminGroups() {
 		var el = document.getElementById('gm-sidebar-content');
 		try {
@@ -110,8 +107,6 @@
 			el.innerHTML = '<div class="gm-empty">加载失败</div>';
 		}
 	}
-
-	// ── Messages ──
 
 	window.gmSelectGroup = async function (roomId, itemEl) {
 		clearActive();
@@ -196,9 +191,5 @@
 			.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 	}
 
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', function () { init(); });
-	} else {
-		init();
-	}
-}());
+	init();
+});

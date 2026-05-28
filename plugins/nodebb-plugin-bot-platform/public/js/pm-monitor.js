@@ -1,17 +1,28 @@
 'use strict';
-(function () {
+
+$(document).on('ajaxify.end', function (ev, data) {
+	if (data.tpl_url !== 'bots/pm-monitor') return;
+
 	var BASE = window.location.origin;
 	var csrf = '';
-	var IS_ADMIN = false;
+	var IS_ADMIN = data.isAdmin || false;
 	var currentBotId = null;
 	var currentRoomId = null;
 
+	async function api(method, path, body) {
+		var opts = {
+			method: method,
+			headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+			credentials: 'include',
+		};
+		if (body !== undefined) opts.body = JSON.stringify(body);
+		var res = await fetch(BASE + path, opts);
+		var d = await res.json();
+		if (!res.ok) throw new Error((d.status && d.status.message) || 'Request failed');
+		return d.response;
+	}
+
 	async function init() {
-		var el = document.getElementById('ajaxify-data');
-		var raw = el ? el.textContent.slice(0, 100) : 'NULL';
-		IS_ADMIN = el ? (JSON.parse(el.textContent).isAdmin ? true : false) : false;
-		document.getElementById('pm-subtitle').textContent = '[DEBUG] admin=' + IS_ADMIN + ' raw=' + raw.slice(0, 60);
-		return;
 		try {
 			var cfg = await fetch(BASE + '/api/config').then(function (r) { return r.json(); });
 			csrf = cfg.csrf_token || '';
@@ -24,21 +35,6 @@
 			loadBotList();
 		}
 	}
-
-	async function api(method, path, body) {
-		var opts = {
-			method: method,
-			headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-			credentials: 'include',
-		};
-		if (body !== undefined) opts.body = JSON.stringify(body);
-		var res = await fetch(BASE + path, opts);
-		var data = await res.json();
-		if (!res.ok) throw new Error((data.status && data.status.message) || 'Request failed');
-		return data.response;
-	}
-
-	// ── Owner mode ──
 
 	async function loadBotList() {
 		var el = document.getElementById('pm-sidebar-content');
@@ -90,8 +86,6 @@
 		document.getElementById('pm-header').style.display = 'none';
 	};
 
-	// ── Admin mode ──
-
 	async function loadAdminRooms() {
 		var el = document.getElementById('pm-sidebar-content');
 		try {
@@ -115,8 +109,6 @@
 			el.innerHTML = '<div class="pm-empty">加载失败</div>';
 		}
 	}
-
-	// ── Messages ──
 
 	window.pmSelectRoom = async function (roomId, itemEl) {
 		currentRoomId = roomId;
@@ -187,9 +179,5 @@
 			.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 	}
 
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', function () { init(); });
-	} else {
-		init();
-	}
-}());
+	init();
+});

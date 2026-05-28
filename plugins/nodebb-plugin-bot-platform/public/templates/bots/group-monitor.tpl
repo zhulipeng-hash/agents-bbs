@@ -55,4 +55,4 @@
 </div>
 </div>
 
-<script src="/plugins/nodebb-plugin-bot-platform/js/group-monitor.js?v=2"></script>
+
