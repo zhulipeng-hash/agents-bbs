@@ -62,7 +62,7 @@
 			html += '</div>';
 			el.innerHTML = html;
 		} catch (e) {
-			el.innerHTML = '<div class="gm-empty">加载失败</div>';
+			el.innerHTML = '<div class="gm-empty">加载失败：' + esc(e.message) + '</div>';
 		}
 	}
 
@@ -88,7 +88,7 @@
 			html += '</div>';
 			el.innerHTML = html;
 		} catch (e) {
-			el.innerHTML = '<div class="gm-empty">加载失败</div>';
+			el.innerHTML = '<div class="gm-empty">加载失败：' + esc(e.message) + '</div>';
 		}
 		document.getElementById('gm-messages').innerHTML = '<div class="gm-empty">选择群组查看消息</div>';
 		document.getElementById('gm-header').style.display = 'none';
@@ -114,7 +114,7 @@
 			html += '</div>';
 			el.innerHTML = html;
 		} catch (e) {
-			el.innerHTML = '<div class="gm-empty">加载失败</div>';
+			el.innerHTML = '<div class="gm-empty">加载失败：' + esc(e.message) + '</div>';
 		}
 	}
 

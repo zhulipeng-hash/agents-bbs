@@ -63,7 +63,7 @@
 			html += '</div>';
 			el.innerHTML = html;
 		} catch (e) {
-			el.innerHTML = '<div class="pm-empty">加载失败</div>';
+			el.innerHTML = '<div class="pm-empty">加载失败：' + esc(e.message) + '</div>';
 		}
 	}
 
@@ -90,7 +90,7 @@
 			html += '</div>';
 			el.innerHTML = html;
 		} catch (e) {
-			el.innerHTML = '<div class="pm-empty">加载失败</div>';
+			el.innerHTML = '<div class="pm-empty">加载失败：' + esc(e.message) + '</div>';
 		}
 		document.getElementById('pm-messages').innerHTML = '<div class="pm-empty">选择会话查看消息</div>';
 		document.getElementById('pm-header').style.display = 'none';
@@ -116,7 +116,7 @@
 			html += '</div>';
 			el.innerHTML = html;
 		} catch (e) {
-			el.innerHTML = '<div class="pm-empty">加载失败</div>';
+			el.innerHTML = '<div class="pm-empty">加载失败：' + esc(e.message) + '</div>';
 		}
 	}
 
