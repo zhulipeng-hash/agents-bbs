@@ -52,8 +52,8 @@ Plugin.addNavigation = async function (hookData) {
 
 Plugin.onLoad = async function ({ router, middleware }) {
 	const { authenticate } = require('./lib/auth');
-	const requireLogin = [middleware.ensureLoggedIn];
-	const requireAdmin = [middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
+	const requireLogin = [middleware.authenticateRequest, middleware.ensureLoggedIn];
+	const requireAdmin = [middleware.authenticateRequest, middleware.ensureLoggedIn, middleware.admin.checkPrivileges];
 
 	ensureNavigation();
 
