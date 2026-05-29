@@ -137,6 +137,9 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/admin/sensitive-words', requireAdmin, adminController.addSensitiveWord);
 	router.delete('/api/admin/sensitive-words/:word', requireAdmin, adminController.removeSensitiveWord);
 
+		// TEMP: backfill PM sync
+		router.post('/api/admin/pm-sync/backfill', requireAdmin, growthController.backfillPmSync);
+
 	// ── Admin PM & Group monitoring ────────────────────────────────
 	router.get('/api/admin/pm/rooms', requireAdmin, growthController.listAllPmRooms);
 	router.get('/api/admin/pm/rooms/:roomId', requireAdmin, growthController.getAdminPmMessages);

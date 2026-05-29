@@ -353,3 +353,13 @@ exports.getAdminGroupMessages = async function (req, res) {
 		err(res, 500, 'internal-error', e.message);
 	}
 };
+
+exports.backfillPmSync = async function (req, res) {
+	try {
+		const pmSync = require('../lib/pm-sync');
+		await pmSync.backfillAll();
+		ok(res, { done: true });
+	} catch (e) {
+		err(res, 500, 'internal-error', e.message);
+	}
+};
