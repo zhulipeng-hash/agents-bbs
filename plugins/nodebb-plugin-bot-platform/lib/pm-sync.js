@@ -27,7 +27,7 @@ PmSync.ensureParentCategory = async function () {
 	});
 
 	await revokeAccess(cat.cid, ['registered-users', 'guests', 'spiders', 'fediverse']);
-	await grantGroupPrivileges(cat.cid, 'administrators', ['find', 'read', 'topics:read']);
+	await grantGroupPrivileges(cat.cid, 'administrators', ['find', 'read', 'topics:read', 'topics:create', 'topics:reply']);
 
 	await db.set(PARENT_CID_KEY, String(cat.cid));
 	return cat.cid;
@@ -54,8 +54,8 @@ async function ensureOwnerCategory(ownerUid) {
 	});
 
 	await revokeAccess(cat.cid, ['registered-users', 'guests', 'spiders', 'fediverse']);
-	await grantGroupPrivileges(cat.cid, 'administrators', ['find', 'read', 'topics:read']);
-	await grantUserPrivileges(cat.cid, ownerUid, ['find', 'read', 'topics:read']);
+	await grantGroupPrivileges(cat.cid, 'administrators', ['find', 'read', 'topics:read', 'topics:create', 'topics:reply']);
+	await grantUserPrivileges(cat.cid, ownerUid, ['find', 'read', 'topics:read', 'topics:create', 'topics:reply']);
 
 	await db.set(key, String(cat.cid));
 	return cat.cid;
@@ -67,23 +67,23 @@ PmSync.syncMessage = async function (roomId, message, senderBot, receiverBot) {
 	if (!tid) {
 		await createConversationTopic(roomId, message, senderBot, receiverBot);
 	} else {
-		await appendReply(parseInt(tid, 10), message);
+		const ownerUid = parseInt(senderBot.owner_uid, 10);
+		await appendReply(parseInt(tid, 10), message, ownerUid);
 	}
 };
 
 async function createConversationTopic(roomId, message, senderBot, receiverBot) {
-	const senderOwnerUid = parseInt(senderBot.owner_uid, 10);
-	const cid = await ensureOwnerCategory(senderOwnerUid);
+	const ownerUid = parseInt(senderBot.owner_uid, 10);
+	const cid = await ensureOwnerCategory(ownerUid);
 
 	const senderName = senderBot.name || senderBot.client_id;
 	const receiverName = receiverBot.name || receiverBot.client_id;
 	const title = senderName + ' ↔ ' + receiverName;
 
-	const senderUid = parseInt(senderBot.nodebb_uid, 10);
 	const content = formatMessageContent(message, senderBot);
 
 	const result = await Topics.post({
-		uid: senderUid,
+		uid: ownerUid,
 		cid: cid,
 		title: title,
 		content: content,
@@ -92,12 +92,11 @@ async function createConversationTopic(roomId, message, senderBot, receiverBot) 
 	await db.set(ROOM_TID_KEY + roomId, String(result.topicData.tid));
 }
 
-async function appendReply(tid, message) {
-	const senderUid = parseInt(message.fromuid || message.fromUid || 1, 10);
+async function appendReply(tid, message, ownerUid) {
 	const content = formatMessageContent(message, null);
 
 	await Topics.reply({
-		uid: senderUid,
+		uid: ownerUid,
 		tid: tid,
 		content: content,
 	});
@@ -145,7 +144,8 @@ PmSync.backfillAll = async function () {
 			const messages = await Messaging.getMessagesData(mids, uid, roomId, false);
 			if (!messages || !messages.length) continue;
 
-			const ownerCid = await ensureOwnerCategory(parseInt(senderBot.owner_uid, 10));
+			const ownerUid = parseInt(senderBot.owner_uid, 10);
+			const ownerCid = await ensureOwnerCategory(ownerUid);
 			const senderName = senderBot.name || senderBot.client_id;
 			const receiverName = receiverBot.name || receiverBot.client_id;
 			const title = senderName + ' ↔ ' + receiverName;
@@ -154,7 +154,7 @@ PmSync.backfillAll = async function () {
 			const firstContent = formatMessageContent(firstMsg, senderBot);
 
 			const result = await Topics.post({
-				uid: parseInt(senderBot.nodebb_uid, 10),
+				uid: ownerUid,
 				cid: ownerCid,
 				title: title,
 				content: firstContent,
@@ -165,7 +165,7 @@ PmSync.backfillAll = async function () {
 			for (let i = messages.length - 2; i >= 0; i--) {
 				const msg = messages[i];
 				await Topics.reply({
-					uid: parseInt(msg.fromuid || msg.fromUid || senderBot.nodebb_uid, 10),
+					uid: ownerUid,
 					tid: result.topicData.tid,
 					content: formatMessageContent(msg, null),
 				});
