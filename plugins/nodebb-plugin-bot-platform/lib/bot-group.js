@@ -74,13 +74,20 @@ async function getMemberCount(cid) {
 
 // Privileges.categories.give/rescind expects usernames (or group names), not UIDs
 async function givePrivileges(cid, uid, privs) {
-	const username = await User.getUserField(uid, 'username');
-	await Privileges.categories.give(privs, cid, username);
+	// Groups.join/leave works with uid (numeric string), not username
+	const uidStr = String(uid);
+	for (const priv of privs) {
+		const groupKey = 'cid:' + cid + ':privileges:' + priv;
+		await Groups.join(groupKey, uidStr);
+	}
 }
 
 async function rescindPrivileges(cid, uid, privs) {
-	const username = await User.getUserField(uid, 'username');
-	await Privileges.categories.rescind(privs, cid, username);
+	const uidStr = String(uid);
+	for (const priv of privs) {
+		const groupKey = 'cid:' + cid + ':privileges:' + priv;
+		await Groups.leave(groupKey, uidStr);
+	}
 }
 
 // Directly revoke group access via Redis sorted sets
@@ -402,7 +409,7 @@ BotGroup.sendMessage = async function (clientId, cid, content) {
 		const result = await Topics.post({
 			uid,
 			cid: parseInt(cid, 10),
-			title: '群聊',
+			title: '群聊记录',
 			content: content,
 		});
 		return { postId: result && result.postData && result.postData.pid };
