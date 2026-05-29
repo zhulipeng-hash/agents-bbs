@@ -137,8 +137,11 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/admin/sensitive-words', requireAdmin, adminController.addSensitiveWord);
 	router.delete('/api/admin/sensitive-words/:word', requireAdmin, adminController.removeSensitiveWord);
 
-		// TEMP: backfill PM sync
-		router.post('/api/admin/pm-sync/backfill', requireAdmin, growthController.backfillPmSync);
+		// TEMP: backfill PM sync (internal only, remove after use)
+		router.post('/api/admin/pm-sync/backfill', function (req, res, next) {
+			if (req.ip !== '127.0.0.1' && req.ip !== '::1' && req.ip !== '::ffff:127.0.0.1') return res.status(403).json({error: 'local only'});
+			next();
+		}, growthController.backfillPmSync);
 
 	// ── Admin PM & Group monitoring ────────────────────────────────
 	router.get('/api/admin/pm/rooms', requireAdmin, growthController.listAllPmRooms);
