@@ -37,7 +37,7 @@
 			csrf = cfg.csrf_token || '';
 		} catch (e) {}
 		if (IS_ADMIN) {
-			document.getElementById('gm-subtitle').textContent = '管理员视图 — 查看所有 Bot 私群记录';
+			document.getElementById('gm-subtitle').textContent = '管理员视图 — 查看并管理所有 Bot 私群';
 			loadAdminGroups();
 		} else {
 			document.getElementById('gm-subtitle').textContent = '选择 Bot 查看其参与的私群';
@@ -81,8 +81,8 @@
 			var html = '<div class="gm-section-label">参与的群组</div><div class="gm-list">';
 			groups.forEach(function (g) {
 				var meta = g.memberCount + ' 人' + (g.name ? ' · ' + esc(g.name) : '');
-				html += '<div class="gm-item" onclick="gmSelectGroup(\'' + g.roomId + '\',this)">'
-					+ '<span class="gm-item-name">' + esc(g.name || '群组 #' + g.roomId) + '</span>'
+				html += '<div class="gm-item" onclick="gmSelectGroup(\'' + g.cid + '\',this)">'
+					+ '<span class="gm-item-name">' + esc(g.name || '群组 #' + g.cid) + '</span>'
 					+ '<span class="gm-item-meta">' + esc(meta) + '</span></div>';
 			});
 			html += '</div>';
@@ -105,10 +105,10 @@
 			}
 			var html = '<div class="gm-section-label">全部私群</div><div class="gm-list">';
 			groups.forEach(function (g) {
-				var host = g.hostClientId ? g.hostClientId.slice(0, 8) + '...' : '?';
-				var meta = g.memberCount + ' 人 · Host: ' + esc(host);
-				html += '<div class="gm-item" onclick="gmSelectGroupAdmin(\'' + g.roomId + '\',this)">'
-					+ '<span class="gm-item-name">' + esc(g.name || '群组 #' + g.roomId) + '</span>'
+				var admin = g.adminClientId ? g.adminClientId.slice(0, 8) + '...' : '?';
+				var meta = g.memberCount + ' 人 · 群管理员: ' + esc(admin);
+				html += '<div class="gm-item" onclick="gmSelectGroupAdmin(\'' + g.cid + '\',this)">'
+					+ '<span class="gm-item-name">' + esc(g.name || '群组 #' + g.cid) + '</span>'
 					+ '<span class="gm-item-meta">' + esc(meta) + '</span></div>';
 			});
 			html += '</div>';
@@ -118,12 +118,12 @@
 		}
 	}
 
-	window.gmSelectGroup = async function (roomId, itemEl) {
+	window.gmSelectGroup = async function (cid, itemEl) {
 		clearActive();
 		itemEl.classList.add('active');
 		if (!currentBotId) return;
 		try {
-			var res = await api('GET', '/api/owner/bots/' + currentBotId + '/groups/' + roomId);
+			var res = await api('GET', '/api/owner/bots/' + currentBotId + '/groups/' + cid);
 			var group = res && res.group;
 			var msgs = (res && res.messages) ? res.messages : [];
 			showGroupHeader(group);
@@ -133,11 +133,11 @@
 		}
 	};
 
-	window.gmSelectGroupAdmin = async function (roomId, itemEl) {
+	window.gmSelectGroupAdmin = async function (cid, itemEl) {
 		clearActive();
 		itemEl.classList.add('active');
 		try {
-			var res = await api('GET', '/api/admin/groups/' + roomId);
+			var res = await api('GET', '/api/admin/groups/' + cid);
 			var group = res && res.group;
 			var msgs = (res && res.messages) ? res.messages : [];
 			showGroupHeader(group);
@@ -151,9 +151,9 @@
 		if (!g) return;
 		var header = document.getElementById('gm-header');
 		header.style.display = 'block';
-		document.getElementById('gm-header-title').textContent = g.name || '群组 #' + g.roomId;
+		document.getElementById('gm-header-title').textContent = g.name || '群组 #' + g.cid;
 		var members = (g.members || []).map(function (m) {
-			var suffix = m.isHost ? ' (Host)' : '';
+			var suffix = m.isAdmin ? ' (群管理员)' : '';
 			return esc(m.name || 'UID ' + m.uid) + suffix;
 		}).join('、');
 		document.getElementById('gm-detail').innerHTML =

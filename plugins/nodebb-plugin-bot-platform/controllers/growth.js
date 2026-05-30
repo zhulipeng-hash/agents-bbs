@@ -217,29 +217,27 @@ exports.exportBotChat = async function (req, res) {
 
 // ── Owner group monitoring ────────────────────────────────────────
 
+// GET /api/owner/bots/:botId/groups
 exports.listBotGroups = async function (req, res) {
 	try {
-		const bot = await registry.getBot(req.params.botId);
-		if (!bot || bot.owner_uid !== String(req.uid)) return err(res, 404, 'not-found', 'Bot not found');
-
 		const botGroup = require('../lib/bot-group');
-		const groups = await botGroup.listBotGroups(req.params.botId);
+		const groups = await botGroup.listOwnerBotGroups(req.uid, req.params.botId);
 		ok(res, { groups });
 	} catch (e) {
 		err(res, 500, 'internal-error', e.message);
 	}
 };
 
+// GET /api/owner/bots/:botId/groups/:cid
 exports.getBotGroupRoom = async function (req, res) {
 	try {
-		const { botId, roomId } = req.params;
-		const bot = await registry.getBot(botId);
-		if (!bot || bot.owner_uid !== String(req.uid)) return err(res, 404, 'not-found', 'Bot not found');
-
+		const { botId, cid } = req.params;
 		const botGroup = require('../lib/bot-group');
 		const start = parseInt(req.query.start || '0', 10);
-		const messages = await botGroup.getMessages(botId, roomId, start, 50);
-		const info = await botGroup.getGroupInfo(roomId);
+		const [messages, info] = await Promise.all([
+			botGroup.getOwnerGroupMessages(req.uid, botId, cid, start, 50),
+			botGroup.getGroupInfo(cid),
+		]);
 		ok(res, { group: info, messages: messages || [] });
 	} catch (e) {
 		err(res, 500, 'internal-error', e.message);
@@ -317,12 +315,12 @@ exports.listAllGroups = async function (req, res) {
 		const seen = new Set();
 		const groups = [];
 
-		for (const cid of allClientIds) {
-			const groupIds = await db.getSetMembers('bot:' + cid + ':groups');
-			for (const roomId of groupIds) {
-				if (seen.has(roomId)) continue;
-				seen.add(roomId);
-				const info = await botGroup.getGroupInfo(roomId);
+		for (const botClientId of allClientIds) {
+			const groupCids = await db.getSetMembers('bot:' + botClientId + ':groups');
+			for (const groupCid of groupCids) {
+				if (seen.has(groupCid)) continue;
+				seen.add(groupCid);
+				const info = await botGroup.getGroupInfo(groupCid);
 				if (info && info.status === 'active') groups.push(info);
 			}
 		}
@@ -334,25 +332,104 @@ exports.listAllGroups = async function (req, res) {
 	}
 };
 
+// GET /api/admin/groups/:cid
 exports.getAdminGroupMessages = async function (req, res) {
 	try {
-		const { roomId } = req.params;
+		const { cid } = req.params;
 		const botGroup = require('../lib/bot-group');
-		const info = await botGroup.getGroupInfo(roomId);
+		const info = await botGroup.getGroupInfo(cid);
 		if (!info) return err(res, 404, 'not-found', 'Group not found');
 
-		// Read posts from category
-		const hostBot = await registry.getBot(info.hostClientId);
-		const clientId = hostBot ? hostBot.client_id : '';
-
+		// Admin reads with adminUid — bypasses member check
 		const start = parseInt(req.query.start || '0', 10);
-		const messages = await botGroup.getMessages(clientId, roomId, start, 50);
+		const messages = await botGroup.getMessages(null, cid, start, 50, { adminUid: req.uid });
 
 		ok(res, { group: info, messages: messages || [] });
 	} catch (e) {
 		err(res, 500, 'internal-error', e.message);
 	}
 };
+
+// ── Admin group management (write operations) ────────────────────
+// BBS admin has all group admin permissions per 私聊群.md design
+
+// POST /api/admin/groups/:cid/invite
+exports.adminInviteMember = async function (req, res) {
+	try {
+		const { client_id } = req.body;
+		if (!client_id) return err(res, 400, 'bad-request', 'client_id is required');
+		const botGroup = require('../lib/bot-group');
+		const result = await botGroup.sendInvite(null, req.params.cid, client_id, { adminUid: req.uid });
+		ok(res, { invited: client_id, inviteId: result.inviteId });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// POST /api/admin/groups/:cid/kick
+exports.adminKickMember = async function (req, res) {
+	try {
+		const { client_id } = req.body;
+		if (!client_id) return err(res, 400, 'bad-request', 'client_id is required');
+		const botGroup = require('../lib/bot-group');
+		await botGroup.kickMember(null, req.params.cid, client_id, { adminUid: req.uid });
+		ok(res, { kicked: client_id });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// DELETE /api/admin/groups/:cid
+exports.adminDissolveGroup = async function (req, res) {
+	try {
+		const botGroup = require('../lib/bot-group');
+		await botGroup.dissolveGroup(null, req.params.cid, { adminUid: req.uid });
+		ok(res, { dissolved: true });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// POST /api/admin/groups/:cid/transfer
+exports.adminTransferAdmin = async function (req, res) {
+	try {
+		const { client_id } = req.body;
+		if (!client_id) return err(res, 400, 'bad-request', 'client_id is required');
+		const botGroup = require('../lib/bot-group');
+		await botGroup.transferAdmin(null, req.params.cid, client_id, { adminUid: req.uid });
+		ok(res, { newAdmin: client_id });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// PUT /api/admin/groups/:cid/rule
+exports.adminUpdateRule = async function (req, res) {
+	try {
+		const { rule } = req.body;
+		if (rule === undefined) return err(res, 400, 'bad-request', 'rule is required');
+		const botGroup = require('../lib/bot-group');
+		await botGroup.updateRule(null, req.params.cid, rule, { adminUid: req.uid });
+		ok(res, { updated: true });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// POST /api/admin/groups/:cid/messages
+exports.adminSendMessage = async function (req, res) {
+	try {
+		const { content } = req.body;
+		if (!content) return err(res, 400, 'bad-request', 'content is required');
+		const botGroup = require('../lib/bot-group');
+		const message = await botGroup.sendMessage(null, req.params.cid, content, { adminUid: req.uid });
+		ok(res, { postId: message && message.postId });
+	} catch (e) {
+		err(res, 400, 'bad-request', e.message);
+	}
+};
+
+// ── Backfill ──────────────────────────────────────────────────────
 
 exports.backfillPmSync = async function (req, res) {
 	try {

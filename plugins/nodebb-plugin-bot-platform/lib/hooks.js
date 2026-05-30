@@ -86,7 +86,7 @@ Hooks.filterPostCreate = async function (hookData) {
 // Check if a roomId is a bot group
 async function isBotGroup(roomId) {
 	if (!roomId) return false;
-	const exists = await db.isObjectField('bot:group:' + roomId, 'host_client_id');
+	const exists = await db.isObjectField('bot:group:' + roomId, 'admin_client_id');
 	return exists;
 }
 

@@ -42,10 +42,10 @@ exports.listGroups = async function (req, res) {
 	}
 };
 
-// GET /api/bot/groups/:roomId
+// GET /api/bot/groups/:cid
 exports.getGroupInfo = async function (req, res) {
 	try {
-		const info = await botGroup.getGroupInfo(req.params.roomId);
+		const info = await botGroup.getGroupInfo(req.params.cid);
 		if (!info) return err(res, 404, 'not-found', 'Group not found');
 		ok(res, info);
 	} catch (e) {
@@ -53,7 +53,7 @@ exports.getGroupInfo = async function (req, res) {
 	}
 };
 
-// POST /api/bot/groups/:roomId/invite
+// POST /api/bot/groups/:cid/invite
 exports.inviteMember = async function (req, res) {
 	try {
 		const { client_id } = req.body;
@@ -61,14 +61,14 @@ exports.inviteMember = async function (req, res) {
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		const result = await botGroup.sendInvite(req.botClientId, req.params.roomId, client_id);
+		const result = await botGroup.sendInvite(req.botClientId, req.params.cid, client_id);
 		ok(res, { invited: client_id, inviteId: result.inviteId });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
 };
 
-// POST /api/bot/groups/:roomId/kick
+// POST /api/bot/groups/:cid/kick
 exports.kickMember = async function (req, res) {
 	try {
 		const { client_id } = req.body;
@@ -76,42 +76,42 @@ exports.kickMember = async function (req, res) {
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		await botGroup.kickMember(req.botClientId, req.params.roomId, client_id);
+		await botGroup.kickMember(req.botClientId, req.params.cid, client_id);
 		ok(res, { kicked: client_id });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
 };
 
-// DELETE /api/bot/groups/:roomId
+// DELETE /api/bot/groups/:cid
 exports.dissolveGroup = async function (req, res) {
 	try {
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		await botGroup.dissolveGroup(req.botClientId, req.params.roomId);
+		await botGroup.dissolveGroup(req.botClientId, req.params.cid);
 		ok(res, { dissolved: true });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
 };
 
-// POST /api/bot/groups/:roomId/transfer
-exports.transferHost = async function (req, res) {
+// POST /api/bot/groups/:cid/transfer
+exports.transferAdmin = async function (req, res) {
 	try {
 		const { client_id } = req.body;
 		if (!client_id) return err(res, 400, 'bad-request', 'client_id is required');
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		await botGroup.transferHost(req.botClientId, req.params.roomId, client_id);
-		ok(res, { newHost: client_id });
+		await botGroup.transferAdmin(req.botClientId, req.params.cid, client_id);
+		ok(res, { newAdmin: client_id });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
 };
 
-// PUT /api/bot/groups/:roomId/rule
+// PUT /api/bot/groups/:cid/rule
 exports.updateRule = async function (req, res) {
 	try {
 		const { rule } = req.body;
@@ -119,14 +119,14 @@ exports.updateRule = async function (req, res) {
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		await botGroup.updateRule(req.botClientId, req.params.roomId, rule);
+		await botGroup.updateRule(req.botClientId, req.params.cid, rule);
 		ok(res, { updated: true });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
 };
 
-// POST /api/bot/groups/:roomId/messages
+// POST /api/bot/groups/:cid/messages
 exports.sendMessage = async function (req, res) {
 	try {
 		const { content } = req.body;
@@ -134,19 +134,19 @@ exports.sendMessage = async function (req, res) {
 		if (req.botScope !== 'full') {
 			return err(res, 403, 'forbidden', 'Token scope must be full');
 		}
-		const message = await botGroup.sendMessage(req.botClientId, req.params.roomId, content);
-		ok(res, { messageId: message && message.mid });
+		const message = await botGroup.sendMessage(req.botClientId, req.params.cid, content);
+		ok(res, { postId: message && message.postId });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);
 	}
 };
 
-// GET /api/bot/groups/:roomId/messages
+// GET /api/bot/groups/:cid/messages
 exports.getMessages = async function (req, res) {
 	try {
 		const start = parseInt(req.query.start || '0', 10);
 		const count = parseInt(req.query.count || '50', 10);
-		const messages = await botGroup.getMessages(req.botClientId, req.params.roomId, start, count);
+		const messages = await botGroup.getMessages(req.botClientId, req.params.cid, start, count);
 		ok(res, { messages: messages || [] });
 	} catch (e) {
 		err(res, 400, 'bad-request', e.message);

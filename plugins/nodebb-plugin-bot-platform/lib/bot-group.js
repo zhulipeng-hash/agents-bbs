@@ -12,7 +12,7 @@ const BotGroup = module.exports;
 
 const DEFAULT_MAX_MEMBERS = 10;
 const MEMBER_PRIVS = ['find', 'read', 'topics:read', 'topics:create', 'topics:reply'];
-const HOST_PRIVS = [...MEMBER_PRIVS, 'moderate'];
+const ADMIN_PRIVS = [...MEMBER_PRIVS, 'moderate'];
 const PARENT_CID_KEY = 'bot:groups:parentCid';
 
 // ── Parent Category Setup ─────────────────────────────────────
@@ -32,7 +32,7 @@ BotGroup.ensureParentCategory = async function () {
 	});
 
 	// Revoke default access
-		await revokeGroupAccess(cat.cid, ['registered-users', 'guests', 'spiders', 'fediverse']);
+	await revokeGroupAccess(cat.cid, ['registered-users', 'guests', 'spiders', 'fediverse']);
 
 	await db.set(PARENT_CID_KEY, String(cat.cid));
 	return cat.cid;
@@ -52,12 +52,29 @@ async function getGroupMeta(cid) {
 	return db.getObject('bot:group:' + cid);
 }
 
-async function assertHost(clientId, cid) {
+/**
+ * Assert caller is either the group admin (群管理员) or a BBS admin (平台管理员).
+ * @param {string|null} clientId  Bot client_id (null when called from admin routes)
+ * @param {string|number} cid     Group category ID
+ * @param {object} [options]
+ * @param {number} [options.adminUid]  BBS admin uid to check (admin routes pass req.uid)
+ */
+async function assertGroupAdmin(clientId, cid, options) {
+	options = options || {};
 	const meta = await getGroupMeta(cid);
 	if (!meta) throw new Error('Group not found');
 	if (meta.status === 'dissolved') throw new Error('Group has been dissolved');
-	if (meta.host_client_id !== clientId) throw new Error('Only host can perform this action');
-	return meta;
+
+	// Check if caller is the group admin (群管理员)
+	if (clientId && meta.admin_client_id === clientId) return meta;
+
+	// Check if caller is a BBS admin (平台管理员 — bothome管理员)
+	if (options.adminUid) {
+		const isAdmin = await User.isAdministrator(options.adminUid);
+		if (isAdmin) return meta;
+	}
+
+	throw new Error('Only group admin or platform admin can perform this action');
 }
 
 async function assertBotGroup(cid) {
@@ -74,7 +91,6 @@ async function getMemberCount(cid) {
 
 // Privileges.categories.give/rescind expects usernames (or group names), not UIDs
 async function givePrivileges(cid, uid, privs) {
-	// Groups.join/leave works with uid (numeric string), not username
 	const uidStr = String(uid);
 	for (const priv of privs) {
 		const groupKey = 'cid:' + cid + ':privileges:' + priv;
@@ -101,10 +117,11 @@ async function revokeGroupAccess(cid, groupNames) {
 
 // ── Create Group ───────────────────────────────────────────────
 
-BotGroup.createGroup = async function (hostClientId, opts) {
+BotGroup.createGroup = async function (callerClientId, opts, options) {
+	options = options || {};
 	const { name, rule, maxMembers, inviteClientIds } = opts || {};
-	const hostBot = await resolveBot(hostClientId);
-	const hostUid = parseInt(hostBot.nodebb_uid, 10);
+	const callerBot = await resolveBot(callerClientId);
+	const callerUid = parseInt(callerBot.nodebb_uid, 10);
 
 	const invites = inviteClientIds || [];
 	const max = Math.min(maxMembers || DEFAULT_MAX_MEMBERS, DEFAULT_MAX_MEMBERS);
@@ -127,36 +144,36 @@ BotGroup.createGroup = async function (hostClientId, opts) {
 	});
 
 	// Revoke default access
-		await revokeGroupAccess(category.cid, ['registered-users', 'guests', 'spiders', 'fediverse']);
+	await revokeGroupAccess(category.cid, ['registered-users', 'guests', 'spiders', 'fediverse']);
 
-	// Grant host full privileges
-	await givePrivileges(category.cid, hostUid, HOST_PRIVS);
+	// Grant creator (群管理员) full privileges
+	await givePrivileges(category.cid, callerUid, ADMIN_PRIVS);
 
 	// Write bot group metadata
 	await db.setObject('bot:group:' + category.cid, {
-		host_client_id: hostClientId,
-		host_transfer_rule: rule || '',
-		creator_client_id: hostClientId,
+		admin_client_id: callerClientId,
+		admin_transfer_rule: rule || '',
+		creator_client_id: callerClientId,
 		max_members: String(max),
 		status: 'active',
 		created_at: String(Math.floor(Date.now() / 1000)),
 	});
 
-	// Track group membership for host
-	await db.setAdd('bot:' + hostClientId + ':groups', String(category.cid));
+	// Track group membership for creator
+	await db.setAdd('bot:' + callerClientId + ':groups', String(category.cid));
 
 	// Send invitations
 	for (const targetClientId of invites) {
-		await BotGroup.sendInvite(hostClientId, category.cid, targetClientId);
+		await BotGroup.sendInvite(callerClientId, category.cid, targetClientId, options);
 	}
 
-	return { roomId: category.cid, maxMembers: max };
+	return { cid: category.cid, maxMembers: max };
 };
 
 // ── Send Invite ────────────────────────────────────────────────
 
-BotGroup.sendInvite = async function (hostClientId, cid, targetClientId) {
-	await assertHost(hostClientId, cid);
+BotGroup.sendInvite = async function (callerClientId, cid, targetClientId, options) {
+	await assertGroupAdmin(callerClientId, cid, options);
 	const targetBot = await resolveBot(targetClientId);
 
 	// Check if already a member
@@ -180,7 +197,7 @@ BotGroup.sendInvite = async function (hostClientId, cid, targetClientId) {
 	// Write invite metadata
 	await db.setObject('bot:group:invite:' + inviteId, {
 		room_id: String(cid),
-		from_client_id: hostClientId,
+		from_client_id: callerClientId || 'admin',
 		to_client_id: targetClientId,
 		status: 'pending',
 		created_at: String(Math.floor(Date.now() / 1000)),
@@ -220,7 +237,7 @@ BotGroup.acceptInvite = async function (clientId, inviteId) {
 	await db.setObjectField('bot:group:invite:' + inviteId, 'status', 'accepted');
 	await db.setRemove('bot:' + clientId + ':group:invites', inviteId);
 
-	return { roomId: cid };
+	return { cid: cid };
 };
 
 // ── Reject Invite ──────────────────────────────────────────────
@@ -253,13 +270,13 @@ BotGroup.listPendingInvites = async function (clientId) {
 		if (!meta) return null;
 
 		const catData = await Categories.getCategoryFields(cid, ['name']);
-		const hostBot = await registry.getBot(invite.from_client_id);
+		const fromBot = await registry.getBot(invite.from_client_id);
 
 		return {
 			inviteId,
-			roomId: cid,
+			cid: cid,
 			groupName: catData && catData.name || '',
-			from: hostBot ? { clientId: hostBot.client_id, name: hostBot.name } : null,
+			from: fromBot ? { clientId: fromBot.client_id, name: fromBot.name } : null,
 			createdAt: invite.created_at,
 		};
 	}));
@@ -269,9 +286,9 @@ BotGroup.listPendingInvites = async function (clientId) {
 
 // ── Kick Member ────────────────────────────────────────────────
 
-BotGroup.kickMember = async function (hostClientId, cid, targetClientId) {
-	await assertHost(hostClientId, cid);
-	if (hostClientId === targetClientId) throw new Error('Host cannot kick self');
+BotGroup.kickMember = async function (callerClientId, cid, targetClientId, options) {
+	await assertGroupAdmin(callerClientId, cid, options);
+	if (callerClientId === targetClientId) throw new Error('Group admin cannot kick self');
 
 	const targetBot = await resolveBot(targetClientId);
 	const targetUid = parseInt(targetBot.nodebb_uid, 10);
@@ -283,17 +300,15 @@ BotGroup.kickMember = async function (hostClientId, cid, targetClientId) {
 
 // ── Dissolve Group ─────────────────────────────────────────────
 
-BotGroup.dissolveGroup = async function (hostClientId, cid) {
-	await assertHost(hostClientId, cid);
+BotGroup.dissolveGroup = async function (callerClientId, cid, options) {
+	await assertGroupAdmin(callerClientId, cid, options);
 
 	// Mark as dissolved
 	await db.setObjectField('bot:group:' + cid, 'status', 'dissolved');
 
-	// Get all member clientIds to clean up tracking
-	const memberCids = await db.getSetMembers('bot:' + hostClientId + ':groups');
+	// Get all bots that have this group tracked
 	const allBotIds = await db.getSetMembers('bot:all');
 
-	// Find all bots that have this group tracked
 	await Promise.all(allBotIds.map(async (botCid) => {
 		const isMember = await db.isSetMember('bot:' + botCid + ':groups', String(cid));
 		if (isMember) {
@@ -305,35 +320,39 @@ BotGroup.dissolveGroup = async function (hostClientId, cid) {
 	await Categories.purge(cid);
 };
 
-// ── Transfer Host ──────────────────────────────────────────────
+// ── Transfer Admin (群管理员转让) ──────────────────────────────
 
-BotGroup.transferHost = async function (hostClientId, cid, newHostClientId) {
-	await assertHost(hostClientId, cid);
-	if (hostClientId === newHostClientId) throw new Error('Already host');
+BotGroup.transferAdmin = async function (callerClientId, cid, newAdminClientId, options) {
+	await assertGroupAdmin(callerClientId, cid, options);
+	if (callerClientId === newAdminClientId) throw new Error('Already group admin');
 
-	const newHostBot = await resolveBot(newHostClientId);
-	const newHostUid = parseInt(newHostBot.nodebb_uid, 10);
+	const newAdminBot = await resolveBot(newAdminClientId);
+	const newAdminUid = parseInt(newAdminBot.nodebb_uid, 10);
 
-	// Verify new host is a member
-	const hasAccess = await Privileges.categories.can('find', cid, newHostUid);
-	if (!hasAccess) throw new Error('New host must be a group member');
+	// Verify new admin is a member (BBS admin transferring must pick a member)
+	const hasAccess = await Privileges.categories.can('find', cid, newAdminUid);
+	if (!hasAccess) throw new Error('New admin must be a group member');
 
-	const oldHostBot = await resolveBot(hostClientId);
-	const oldHostUid = parseInt(oldHostBot.nodebb_uid, 10);
+	// Get old admin for privilege swap (only if callerClientId is a bot, not BBS admin)
+	if (callerClientId) {
+		const oldAdminBot = await resolveBot(callerClientId);
+		const oldAdminUid = parseInt(oldAdminBot.nodebb_uid, 10);
+		// Swap moderate privilege: old admin → member level
+		await rescindPrivileges(cid, oldAdminUid, ['moderate']);
+	}
+
+	// Grant new admin the moderate privilege
+	await givePrivileges(cid, newAdminUid, ['moderate']);
 
 	// Update metadata
-	await db.setObjectField('bot:group:' + cid, 'host_client_id', newHostClientId);
-
-	// Swap moderate privilege
-	await rescindPrivileges(cid, oldHostUid, ['moderate']);
-	await givePrivileges(cid, newHostUid, ['moderate']);
+	await db.setObjectField('bot:group:' + cid, 'admin_client_id', newAdminClientId);
 };
 
 // ── Update Rule ────────────────────────────────────────────────
 
-BotGroup.updateRule = async function (hostClientId, cid, ruleText) {
-	await assertHost(hostClientId, cid);
-	await db.setObjectField('bot:group:' + cid, 'host_transfer_rule', ruleText);
+BotGroup.updateRule = async function (callerClientId, cid, ruleText, options) {
+	await assertGroupAdmin(callerClientId, cid, options);
+	await db.setObjectField('bot:group:' + cid, 'admin_transfer_rule', ruleText);
 	// Also update category description
 	await Categories.update({ cid: parseInt(cid, 10), description: ruleText });
 };
@@ -354,17 +373,17 @@ BotGroup.getGroupInfo = async function (cid) {
 			uid: parseInt(uid, 10),
 			clientId: userFields && userFields.bot_client_id,
 			name: (userFields && userFields.fullname) || (userFields && userFields.username),
-			isHost: userFields && userFields.bot_client_id === meta.host_client_id,
+			isAdmin: userFields && userFields.bot_client_id === meta.admin_client_id,
 		};
 	}));
 
 	return {
-		roomId: parseInt(cid, 10),
+		cid: parseInt(cid, 10),
 		name: catData && catData.name || '',
 		status: meta.status,
 		maxMembers: parseInt(meta.max_members, 10),
-		rule: meta.host_transfer_rule || '',
-		hostClientId: meta.host_client_id,
+		rule: meta.admin_transfer_rule || '',
+		adminClientId: meta.admin_client_id,
 		creatorClientId: meta.creator_client_id,
 		memberCount: memberUids.length,
 		members,
@@ -382,16 +401,29 @@ BotGroup.listBotGroups = async function (clientId) {
 	return groups.filter(g => g && g.status === 'active');
 };
 
-// ── Send Message (convenience: creates a topic reply in category) ──
+// ── Send Message (creates a topic/reply in category) ──────────
 
-BotGroup.sendMessage = async function (clientId, cid, content) {
+BotGroup.sendMessage = async function (clientId, cid, content, options) {
+	options = options || {};
 	await assertBotGroup(cid);
-	const bot = await resolveBot(clientId);
-	const uid = parseInt(bot.nodebb_uid, 10);
 
-	// Verify membership
-	const hasAccess = await Privileges.categories.can('topics:create', cid, uid);
-	if (!hasAccess) throw new Error('Not a group member');
+	const Topics = require('../../../src/topics');
+
+	// Determine poster identity
+	let posterUid;
+	if (options.adminUid) {
+		// BBS admin posting as themselves
+		const isAdmin = await User.isAdministrator(options.adminUid);
+		if (!isAdmin) throw new Error('Not a platform admin');
+		posterUid = options.adminUid;
+	} else {
+		// Bot posting — verify membership
+		const bot = await resolveBot(clientId);
+		posterUid = parseInt(bot.nodebb_uid, 10);
+
+		const hasAccess = await Privileges.categories.can('topics:create', cid, posterUid);
+		if (!hasAccess) throw new Error('Not a group member');
+	}
 
 	// Content safety
 	const filterResult = await contentFilter.check(content);
@@ -400,14 +432,13 @@ BotGroup.sendMessage = async function (clientId, cid, content) {
 	}
 
 	// Find or create the chat topic in this category
-	const Topics = require('../../../src/topics');
 	const tids = await db.getSortedSetRevRange('cid:' + cid + ':tids', 0, 0);
 	let tid = tids && tids[0];
 
 	if (!tid) {
 		// Create the main chat topic
 		const result = await Topics.post({
-			uid,
+			uid: posterUid,
 			cid: parseInt(cid, 10),
 			title: '群聊记录',
 			content: content,
@@ -417,22 +448,37 @@ BotGroup.sendMessage = async function (clientId, cid, content) {
 
 	// Reply to existing topic
 	const result = await Topics.reply({
-		uid,
+		uid: posterUid,
 		tid: parseInt(tid, 10),
 		content,
 	});
 	return { postId: result && result.pid };
 };
 
-// ── Get Messages (convenience: reads posts from category) ──────
+// ── Get Messages (reads posts from category) ──────────────────
 
-BotGroup.getMessages = async function (clientId, cid, start, count) {
+BotGroup.getMessages = async function (clientId, cid, start, count, options) {
+	options = options || {};
 	await assertBotGroup(cid);
-	const bot = await resolveBot(clientId);
-	const uid = parseInt(bot.nodebb_uid, 10);
 
-	const hasAccess = await Privileges.categories.can('read', cid, uid);
-	if (!hasAccess) throw new Error('Not a group member');
+	let readerUid;
+
+	if (options.adminUid) {
+		// BBS admin reading
+		const isAdmin = await User.isAdministrator(options.adminUid);
+		if (!isAdmin) throw new Error('Not a platform admin');
+		readerUid = options.adminUid;
+	} else if (options.ownerUid) {
+		// Owner reading their bot's group (proxy read)
+		readerUid = options.ownerUid;
+	} else {
+		// Bot reading — verify membership
+		const bot = await resolveBot(clientId);
+		readerUid = parseInt(bot.nodebb_uid, 10);
+
+		const hasAccess = await Privileges.categories.can('read', cid, readerUid);
+		if (!hasAccess) throw new Error('Not a group member');
+	}
 
 	// Get topics in this category
 	const tids = await db.getSortedSetRevRange('cid:' + cid + ':tids', 0, -1);
@@ -445,7 +491,7 @@ BotGroup.getMessages = async function (clientId, cid, start, count) {
 		const pids = await Topics.getPids(tid);
 		if (!pids || !pids.length) continue;
 		const Posts = require('../../../src/posts');
-		const postData = await Posts.getPostsByPids(pids, uid);
+		const postData = await Posts.getPostsByPids(pids, readerUid);
 		postData.forEach(p => {
 			allPosts.push({
 				content: p.content,
@@ -463,4 +509,29 @@ BotGroup.getMessages = async function (clientId, cid, start, count) {
 	const s = start || 0;
 	const c = count || 50;
 	return allPosts.slice(s, s + c);
+};
+
+// ── Owner proxy: list groups for a bot owned by this owner ─────
+
+BotGroup.listOwnerBotGroups = async function (ownerUid, botClientId) {
+	const bot = await registry.getBot(botClientId);
+	if (!bot || bot.owner_uid !== String(ownerUid)) {
+		throw new Error('Bot not found or not owned by you');
+	}
+	return BotGroup.listBotGroups(botClientId);
+};
+
+// ── Owner proxy: read group messages for a bot owned by this owner ──
+
+BotGroup.getOwnerGroupMessages = async function (ownerUid, botClientId, cid, start, count) {
+	const bot = await registry.getBot(botClientId);
+	if (!bot || bot.owner_uid !== String(ownerUid)) {
+		throw new Error('Bot not found or not owned by you');
+	}
+
+	// Verify the bot is in this group
+	const isMember = await db.isSetMember('bot:' + botClientId + ':groups', String(cid));
+	if (!isMember) throw new Error('Bot is not in this group');
+
+	return BotGroup.getMessages(botClientId, cid, start, count, { ownerUid: ownerUid });
 };

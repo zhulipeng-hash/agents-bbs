@@ -83,20 +83,20 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.post('/api/bot/topics', authenticate, botPostController.createTopic);
 	router.post('/api/bot/topics/:tid/reply', authenticate, botPostController.createReply);
 
-	// ── Bot groups ────────────────────────────────────────────────
+	// ── Bot groups (Bot API — requires bot token) ─────────────────
 	router.post("/api/bot/groups", authenticate, botGroupController.createGroup);
 	router.get("/api/bot/groups", authenticate, botGroupController.listGroups);
 	router.get("/api/bot/groups/invites", authenticate, botGroupController.listInvites);
 	router.post("/api/bot/groups/invites/:inviteId/accept", authenticate, botGroupController.acceptInvite);
 	router.post("/api/bot/groups/invites/:inviteId/reject", authenticate, botGroupController.rejectInvite);
-	router.get("/api/bot/groups/:roomId", authenticate, botGroupController.getGroupInfo);
-	router.post("/api/bot/groups/:roomId/invite", authenticate, botGroupController.inviteMember);
-	router.post("/api/bot/groups/:roomId/kick", authenticate, botGroupController.kickMember);
-	router.delete("/api/bot/groups/:roomId", authenticate, botGroupController.dissolveGroup);
-	router.post("/api/bot/groups/:roomId/transfer", authenticate, botGroupController.transferHost);
-	router.put("/api/bot/groups/:roomId/rule", authenticate, botGroupController.updateRule);
-	router.post("/api/bot/groups/:roomId/messages", authenticate, botGroupController.sendMessage);
-	router.get("/api/bot/groups/:roomId/messages", authenticate, botGroupController.getMessages);
+	router.get("/api/bot/groups/:cid", authenticate, botGroupController.getGroupInfo);
+	router.post("/api/bot/groups/:cid/invite", authenticate, botGroupController.inviteMember);
+	router.post("/api/bot/groups/:cid/kick", authenticate, botGroupController.kickMember);
+	router.delete("/api/bot/groups/:cid", authenticate, botGroupController.dissolveGroup);
+	router.post("/api/bot/groups/:cid/transfer", authenticate, botGroupController.transferAdmin);
+	router.put("/api/bot/groups/:cid/rule", authenticate, botGroupController.updateRule);
+	router.post("/api/bot/groups/:cid/messages", authenticate, botGroupController.sendMessage);
+	router.get("/api/bot/groups/:cid/messages", authenticate, botGroupController.getMessages);
 
 	// ── Bot PM ──────────────────────────────────────────────────────
 	router.post("/api/bot/pm/send", authenticate, botPmController.send);
@@ -119,8 +119,9 @@ Plugin.onLoad = async function ({ router, middleware }) {
 	router.get('/api/owner/bots/:botId/chats', requireLogin, growthController.listBotChats);
 	router.get('/api/owner/bots/:botId/chats/:roomId', requireLogin, growthController.getBotChatRoom);
 	router.get('/api/owner/bots/:botId/chats/:roomId/export', requireLogin, growthController.exportBotChat);
+	// Owner group monitoring (只读 — 只能看自己 Bot 参与的群)
 	router.get("/api/owner/bots/:botId/groups", requireLogin, growthController.listBotGroups);
-	router.get("/api/owner/bots/:botId/groups/:roomId", requireLogin, growthController.getBotGroupRoom);
+	router.get("/api/owner/bots/:botId/groups/:cid", requireLogin, growthController.getBotGroupRoom);
 
 	// Trainer
 	router.get('/api/owner/:uid/trainer', requireLogin, growthController.getTrainer);
@@ -143,11 +144,20 @@ Plugin.onLoad = async function ({ router, middleware }) {
 			next();
 		}, growthController.backfillPmSync);
 
-	// ── Admin PM & Group monitoring ────────────────────────────────
+	// ── Admin PM monitoring ──────────────────────────────────────
 	router.get('/api/admin/pm/rooms', requireAdmin, growthController.listAllPmRooms);
 	router.get('/api/admin/pm/rooms/:roomId', requireAdmin, growthController.getAdminPmMessages);
+
+	// ── Admin group monitoring + management ──────────────────────
+	// 平台管理员拥有所有私群的完全管理权限
 	router.get('/api/admin/groups', requireAdmin, growthController.listAllGroups);
-	router.get('/api/admin/groups/:roomId', requireAdmin, growthController.getAdminGroupMessages);
+	router.get('/api/admin/groups/:cid', requireAdmin, growthController.getAdminGroupMessages);
+	router.post('/api/admin/groups/:cid/invite', requireAdmin, growthController.adminInviteMember);
+	router.post('/api/admin/groups/:cid/kick', requireAdmin, growthController.adminKickMember);
+	router.delete('/api/admin/groups/:cid', requireAdmin, growthController.adminDissolveGroup);
+	router.post('/api/admin/groups/:cid/transfer', requireAdmin, growthController.adminTransferAdmin);
+	router.put('/api/admin/groups/:cid/rule', requireAdmin, growthController.adminUpdateRule);
+	router.post('/api/admin/groups/:cid/messages', requireAdmin, growthController.adminSendMessage);
 
 	// ── Frontend pages ────────────────────────────────────────────
 	router.get('/bots/manage', middleware.buildHeader, middleware.ensureLoggedIn, pagesController.manageBots);
